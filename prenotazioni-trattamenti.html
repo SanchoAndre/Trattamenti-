@@ -1244,7 +1244,7 @@ async function refresh(){
   await refresh();
   pollTimer = setInterval(async ()=>{
     const active = document.activeElement;
-    const typing = active && typeof active.matches === 'function' && active.matches('input');
+    const typing = active && typeof active.matches === 'function' && active.matches('input, textarea');
     if(currentTab==='atleta' && !typing && !busy){
       await refresh();
     }
