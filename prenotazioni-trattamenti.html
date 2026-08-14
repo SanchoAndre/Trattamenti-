@@ -231,6 +231,12 @@
     resize:vertical;
   }
   textarea:focus{border-color:var(--pitch);}
+  textarea.autonote{
+    resize:none;
+    overflow:hidden;
+    min-height:38px;
+    line-height:1.4;
+  }
   .checklabel{
     display:flex;
     align-items:center;
@@ -686,12 +692,12 @@ function renderAtleta(){
           ${free ? `
           <div class="bookform">
             <input type="text" id="name-${s.id}" placeholder="Nome e cognome" maxlength="60">
-            <input type="text" id="note-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140">
+            <textarea class="autonote" id="note-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" rows="1" oninput="autoGrow(this)"></textarea>
             <button class="btn-primary" onclick="bookSlot('${s.id}')">Prenota</button>
           </div>` : editing ? `
           <div class="bookform">
             <input type="text" id="editname-${s.id}" placeholder="Nome e cognome" maxlength="60" value="${escapeHtml(s.name)}">
-            <input type="text" id="editnote-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" value="${escapeHtml(s.note || '')}">
+            <textarea class="autonote" id="editnote-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" rows="1" oninput="autoGrow(this)">${escapeHtml(s.note || '')}</textarea>
             <button class="btn-primary" onclick="saveNameEdit('${s.id}')">Salva</button>
           </div>
           <div class="rowactions">
@@ -709,12 +715,22 @@ function renderAtleta(){
     html += `</div>`;
   });
   main.innerHTML = html;
+  initAutoGrow();
 }
 
 function escapeHtml(str){
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+function autoGrow(el){
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function initAutoGrow(){
+  document.querySelectorAll('textarea.autonote').forEach(autoGrow);
 }
 
 async function bookSlot(id){
@@ -861,6 +877,7 @@ function renderAdmin(){
 
   html += adminView === 'riepilogo' ? buildRiepilogoHtml() : buildGestioneHtml();
   main.innerHTML = html;
+  initAutoGrow();
 }
 
 function switchAdminView(v){
@@ -922,7 +939,7 @@ function buildGestioneHtml(){
               <div><label>Orario</label><input type="time" id="edit-time-${s.id}" value="${s.time}"></div>
               <div><label>Durata (min)</label><input type="number" id="edit-dur-${s.id}" value="${s.duration}" min="5" step="5"></div>
               <div><label>Nome (vuoto = libero)</label><input type="text" id="edit-name-${s.id}" value="${s.name ? escapeHtml(s.name) : ''}" maxlength="60"></div>
-              <div class="full"><label>Nota</label><input type="text" id="edit-note-${s.id}" value="${s.note ? escapeHtml(s.note) : ''}" maxlength="140"></div>
+              <div class="full"><label>Nota</label><textarea class="autonote" id="edit-note-${s.id}" maxlength="140" rows="1" oninput="autoGrow(this)">${s.note ? escapeHtml(s.note) : ''}</textarea></div>
               <div class="full"><label class="checklabel"><input type="checkbox" id="edit-done-${s.id}" ${s.done?'checked':''}> Trattamento svolto</label></div>
             </div>
             <div class="rowactions">
