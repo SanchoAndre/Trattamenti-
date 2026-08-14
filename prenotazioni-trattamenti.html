@@ -192,8 +192,18 @@
   .bookform{
     margin-top:9px;
     display:flex;
-    gap:6px;
+    flex-direction:column;
+    gap:7px;
   }
+  .bookform button{width:100%;}
+  .notetext{
+    margin-top:4px;
+    font-size:12.5px;
+    color:var(--taken);
+    font-style:italic;
+    word-break:break-word;
+  }
+  .notetext b{font-style:normal; color:var(--ink);}
   input[type=text], input[type=date], input[type=time], input[type=number], input[type=password]{
     font-family:'Inter',sans-serif;
     font-size:14px;
@@ -206,7 +216,6 @@
     width:100%;
   }
   input:focus{border-color:var(--pitch);}
-  .bookform input{flex:1;}
   button{
     font-family:'Inter',sans-serif;
     font-weight:600;
@@ -602,16 +611,19 @@ function renderAtleta(){
           ${free ? `
           <div class="bookform">
             <input type="text" id="name-${s.id}" placeholder="Nome e cognome" maxlength="60">
+            <input type="text" id="note-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140">
             <button class="btn-primary" onclick="bookSlot('${s.id}')">Prenota</button>
           </div>` : editing ? `
           <div class="bookform">
             <input type="text" id="editname-${s.id}" placeholder="Nome e cognome" maxlength="60" value="${escapeHtml(s.name)}">
+            <input type="text" id="editnote-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" value="${escapeHtml(s.note || '')}">
             <button class="btn-primary" onclick="saveNameEdit('${s.id}')">Salva</button>
           </div>
           <div class="rowactions">
             <button class="btn-ghost" onclick="toggleEditAthlete(null)">Annulla modifica</button>
           </div>` : `
           <div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>
+          ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
           <div class="rowactions">
             <button class="btn-ghost" onclick="toggleEditAthlete('${s.id}')">Cambia nome</button>
             <button class="btn-danger" onclick="cancelBooking('${s.id}')">Annulla prenotazione</button>
@@ -637,6 +649,8 @@ async function bookSlot(id){
     input.focus();
     return;
   }
+  const noteInput = document.getElementById('note-'+id);
+  const note = noteInput ? (noteInput.value || '').trim() : '';
   input.disabled = true;
   busy = true;
   try{
@@ -645,10 +659,11 @@ async function bookSlot(id){
     if(!slot){ showToast('Questo slot non esiste più.'); loaded=true; renderAtleta(); return; }
     if(slot.name){ showToast('Slot appena occupato da un altro atleta.'); renderAtleta(); return; }
     slot.name = name;
+    slot.note = note || null;
     slot.bookedAt = Date.now();
     const ok = await persistSlots(slots);
     if(ok){ showToast('Prenotazione confermata ✓'); }
-    else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.name = null; }
+    else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.name = null; slot.note = null; }
     renderAtleta();
   } catch(e){
     showToast('Errore: ' + e.message);
@@ -666,11 +681,12 @@ async function cancelBooking(id){
     const slot = slots.find(s=>s.id===id);
     if(!slot) return;
     slot.name = null;
+    slot.note = null;
     slot.bookedAt = null;
     const ok = await persistSlots(slots);
     if(ok) showToast('Prenotazione annullata');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
-    renderAtleta();
+    if(currentTab==='admin') renderAdmin(); else renderAtleta();
   } catch(e){
     showToast('Errore: ' + e.message);
   } finally {
@@ -690,14 +706,17 @@ async function saveNameEdit(id){
     input.focus();
     return;
   }
+  const noteInput = document.getElementById('editnote-'+id);
+  const note = noteInput ? (noteInput.value || '').trim() : '';
   busy = true;
   try{
     slots = await fetchSlots();
     const slot = slots.find(s=>s.id===id);
     if(!slot){ showToast('Questo slot non esiste più.'); editingAthleteId = null; renderAtleta(); return; }
     slot.name = name;
+    slot.note = note || null;
     const ok = await persistSlots(slots);
-    if(ok) showToast('Nome aggiornato ✓');
+    if(ok) showToast('Prenotazione aggiornata ✓');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
     editingAthleteId = null;
     renderAtleta();
@@ -798,6 +817,7 @@ function buildGestioneHtml(){
               <div><label>Orario</label><input type="time" id="edit-time-${s.id}" value="${s.time}"></div>
               <div><label>Durata (min)</label><input type="number" id="edit-dur-${s.id}" value="${s.duration}" min="5" step="5"></div>
               <div><label>Nome (vuoto = libero)</label><input type="text" id="edit-name-${s.id}" value="${s.name ? escapeHtml(s.name) : ''}" maxlength="60"></div>
+              <div class="full"><label>Nota</label><input type="text" id="edit-note-${s.id}" value="${s.note ? escapeHtml(s.note) : ''}" maxlength="140"></div>
             </div>
             <div class="rowactions">
               <button class="btn-primary" onclick="saveAdminEdit('${s.id}')">Salva modifiche</button>
@@ -806,6 +826,7 @@ function buildGestioneHtml(){
             <span class="slottime">${s.time}–${end}</span>
             <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
             ${!free ? `<div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>` : ''}
+            ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
             <div class="rowactions">
               <button class="btn-ghost" onclick="toggleEditAdmin('${s.id}')">Modifica</button>
               ${!free ? `<button class="btn-ghost" onclick="cancelBooking('${s.id}')">Libera slot</button>` : ''}
@@ -884,7 +905,7 @@ async function addSlot(){
   busy = true;
   try{
     slots = await fetchSlots();
-    slots.push({ id: uid(), date, time, duration: dur, name: null, bookedAt: null });
+    slots.push({ id: uid(), date, time, duration: dur, name: null, note: null, bookedAt: null });
     const ok = await persistSlots(slots);
     if(ok) showToast('Slot aggiunto');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
@@ -929,7 +950,7 @@ async function generateSlots(){
       const t = pad(Math.floor(m/60))+':'+pad(m%60);
       if(existingTimes.has(t)){ skipped++; }
       else{
-        toAdd.push({ id: uid(), date, time: t, duration: dur, name: null, bookedAt: null });
+        toAdd.push({ id: uid(), date, time: t, duration: dur, name: null, note: null, bookedAt: null });
         existingTimes.add(t);
       }
       m += every;
@@ -982,6 +1003,7 @@ async function saveAdminEdit(id){
   const time = document.getElementById('edit-time-'+id).value;
   const dur = Number(document.getElementById('edit-dur-'+id).value);
   const name = document.getElementById('edit-name-'+id).value.trim();
+  const note = document.getElementById('edit-note-'+id).value.trim();
   if(!date || !time || !dur || dur<=0){
     showToast('Compila data, orario e durata.');
     return;
@@ -995,6 +1017,7 @@ async function saveAdminEdit(id){
     slot.time = time;
     slot.duration = dur;
     slot.name = name || null;
+    slot.note = name ? (note || null) : null;
     if(!name) slot.bookedAt = null;
     const ok = await persistSlots(slots);
     if(ok) showToast('Slot aggiornato');
