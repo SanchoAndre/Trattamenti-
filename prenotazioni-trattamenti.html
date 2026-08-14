@@ -162,6 +162,7 @@
   }
   .disc.free{background:var(--free); color:#fff;}
   .disc.taken{background:var(--taken); color:#fff;}
+  .disc.done{background:var(--pitch); color:#fff;}
   .disc .n{font-size:15px;}
   .disc .u{font-size:8px; letter-spacing:.04em; text-transform:uppercase; opacity:.9;}
   .slotinfo{flex:1; min-width:0;}
@@ -183,6 +184,7 @@
   }
   .statuspill.free{background:var(--free-bg); color:var(--free);}
   .statuspill.taken{background:var(--taken-bg); color:var(--taken);}
+  .statuspill.done{background:var(--sage-bg); color:var(--pitch-dark); box-shadow:inset 0 0 0 1px var(--pitch);}
   .bookedname{
     margin-top:4px;
     font-size:13.5px;
@@ -229,6 +231,17 @@
     resize:vertical;
   }
   textarea:focus{border-color:var(--pitch);}
+  .checklabel{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13.5px;
+    font-weight:500;
+    color:var(--ink);
+    text-transform:none;
+    cursor:pointer;
+  }
+  .checklabel input{width:auto;}
   button{
     font-family:'Inter',sans-serif;
     font-weight:600;
@@ -745,10 +758,30 @@ async function cancelBooking(id){
     slot.name = null;
     slot.note = null;
     slot.bookedAt = null;
+    slot.done = false;
     const ok = await persistSlots(slots);
     if(ok) showToast('Prenotazione annullata');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
     if(currentTab==='admin') renderAdmin(); else renderAtleta();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+async function toggleDone(id){
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===id);
+    if(!slot) return;
+    const newDone = !slot.done;
+    slot.done = newDone;
+    const ok = await persistSlots(slots);
+    if(ok) showToast(newDone ? 'Trattamento segnato come svolto ✓' : 'Segnato come non svolto');
+    else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.done = !newDone; }
+    renderAdmin();
   } catch(e){
     showToast('Errore: ' + e.message);
   } finally {
@@ -881,7 +914,7 @@ function buildGestioneHtml(){
         const free = !s.name;
         const editing = editingAdminId === s.id;
         html += `<div class="slotcard">
-          <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
+          <div class="disc ${free?'free':(s.done?'done':'taken')}"><span class="n">${s.duration}</span><span class="u">min</span></div>
           <div class="slotinfo">
             ${editing ? `
             <div class="addgrid" style="margin-top:2px;">
@@ -890,17 +923,19 @@ function buildGestioneHtml(){
               <div><label>Durata (min)</label><input type="number" id="edit-dur-${s.id}" value="${s.duration}" min="5" step="5"></div>
               <div><label>Nome (vuoto = libero)</label><input type="text" id="edit-name-${s.id}" value="${s.name ? escapeHtml(s.name) : ''}" maxlength="60"></div>
               <div class="full"><label>Nota</label><input type="text" id="edit-note-${s.id}" value="${s.note ? escapeHtml(s.note) : ''}" maxlength="140"></div>
+              <div class="full"><label class="checklabel"><input type="checkbox" id="edit-done-${s.id}" ${s.done?'checked':''}> Trattamento svolto</label></div>
             </div>
             <div class="rowactions">
               <button class="btn-primary" onclick="saveAdminEdit('${s.id}')">Salva modifiche</button>
               <button class="btn-ghost" onclick="toggleEditAdmin(null)">Annulla</button>
             </div>` : `
             <span class="slottime">${s.time}–${end}</span>
-            <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
+            <span class="statuspill ${free?'free':(s.done?'done':'taken')}">${free?'Libero':(s.done?'Svolto ✓':'Occupato')}</span>
             ${!free ? `<div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>` : ''}
             ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
             <div class="rowactions">
               <button class="btn-ghost" onclick="toggleEditAdmin('${s.id}')">Modifica</button>
+              ${!free ? `<button class="btn-ghost" onclick="toggleDone('${s.id}')">${s.done?'Segna non svolto':'Segna svolto ✓'}</button>` : ''}
               ${!free ? `<button class="btn-ghost" onclick="cancelBooking('${s.id}')">Libera slot</button>` : ''}
               <button class="btn-danger" onclick="deleteSlot('${s.id}')">Elimina</button>
             </div>`}
@@ -925,10 +960,12 @@ function buildRiepilogoHtml(){
   }
   const total = slots.length;
   const booked = slots.filter(s=>s.name).length;
+  const done = slots.filter(s=>s.name && s.done).length;
   let html = `<div class="riepilogohead no-print">
       <div class="riepstat"><b>${total}</b> slot totali</div>
       <div class="riepstat"><b>${booked}</b> prenotati</div>
       <div class="riepstat"><b>${total-booked}</b> liberi</div>
+      <div class="riepstat"><b>${done}</b> svolti</div>
       <button class="btn-ghost" onclick="window.print()">Stampa</button>
     </div>`;
   const groups = groupByDay(slots);
@@ -939,7 +976,7 @@ function buildRiepilogoHtml(){
       const end = addMinutes(s.time, s.duration);
       html += `<div class="rieprow">
         <span class="rieptime">${s.time}–${end}</span>
-        <span class="riepname ${s.name?'':'riepfree'}">${s.name ? escapeHtml(s.name) : 'Libero'}</span>
+        <span class="riepname ${s.name?'':'riepfree'}">${s.name ? escapeHtml(s.name) + (s.done ? ' ✓' : '') : 'Libero'}</span>
       </div>`;
     });
     html += `</div></div>`;
@@ -1007,7 +1044,7 @@ async function addSlot(){
   busy = true;
   try{
     slots = await fetchSlots();
-    slots.push({ id: uid(), date, time, duration: dur, name: null, note: null, bookedAt: null });
+    slots.push({ id: uid(), date, time, duration: dur, name: null, note: null, done: false, bookedAt: null });
     const ok = await persistSlots(slots);
     if(ok) showToast('Slot aggiunto');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
@@ -1052,7 +1089,7 @@ async function generateSlots(){
       const t = pad(Math.floor(m/60))+':'+pad(m%60);
       if(existingTimes.has(t)){ skipped++; }
       else{
-        toAdd.push({ id: uid(), date, time: t, duration: dur, name: null, note: null, bookedAt: null });
+        toAdd.push({ id: uid(), date, time: t, duration: dur, name: null, note: null, done: false, bookedAt: null });
         existingTimes.add(t);
       }
       m += every;
@@ -1106,6 +1143,7 @@ async function saveAdminEdit(id){
   const dur = Number(document.getElementById('edit-dur-'+id).value);
   const name = document.getElementById('edit-name-'+id).value.trim();
   const note = document.getElementById('edit-note-'+id).value.trim();
+  const done = document.getElementById('edit-done-'+id).checked;
   if(!date || !time || !dur || dur<=0){
     showToast('Compila data, orario e durata.');
     return;
@@ -1120,6 +1158,7 @@ async function saveAdminEdit(id){
     slot.duration = dur;
     slot.name = name || null;
     slot.note = name ? (note || null) : null;
+    slot.done = name ? done : false;
     if(!name) slot.bookedAt = null;
     const ok = await persistSlots(slots);
     if(ok) showToast('Slot aggiornato');
