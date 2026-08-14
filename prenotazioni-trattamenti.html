@@ -23,6 +23,10 @@
     --amber-dark:#C4841F;
     --danger:#B5453D;
     --radius:14px;
+    --team-tequila:#6B3FA0;
+    --team-tequila-bg:#F1E9FA;
+    --team-cotarica:#A93226;
+    --team-cotarica-bg:#FBEAE8;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -290,40 +294,79 @@
     font-weight:600;
     line-height:1.45;
   }
-  .matchcard{
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:12px 14px;
-    margin-bottom:10px;
-    display:flex;
-    align-items:center;
-    gap:12px;
-  }
-  .matchcard.important{
-    border-color:var(--amber);
-    box-shadow:0 0 0 1px var(--amber);
-  }
-  .matchlogo{
-    width:42px;
-    height:42px;
-    border-radius:50%;
-    object-fit:cover;
-    flex:none;
-    box-shadow:0 0 0 2px var(--sage-bg);
-  }
-  .matchinfo{flex:1; min-width:0;}
-  .matchteam{
+  .matchdaybar{
+    background:var(--pitch-dark);
+    color:#fff;
     font-family:'Space Grotesk',sans-serif;
     font-weight:700;
-    font-size:14.5px;
-    color:var(--pitch-dark);
+    font-size:12.5px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    padding:10px 14px;
+    border-radius:8px;
+    margin:18px 0 10px;
   }
-  .matchteam .star{color:var(--amber);}
-  .matchvs{font-size:14px; color:var(--ink); margin-top:1px;}
-  .matchmeta{font-size:12.5px; color:var(--taken); margin-top:2px;}
+  .matchdaybar:first-child{margin-top:0;}
+  .matchrow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:11px 12px;
+    border-radius:10px;
+    margin-bottom:8px;
+    border-left:5px solid var(--line);
+    background:var(--card);
+  }
+  .matchrow.team-tequila{background:var(--team-tequila-bg); border-left-color:var(--team-tequila);}
+  .matchrow.team-cotarica{background:var(--team-cotarica-bg); border-left-color:var(--team-cotarica);}
+  .matchrow .mtime{flex:none; width:50px;}
+  .matchrow .mtime .start{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:16px;
+    color:var(--ink);
+  }
+  .matchrow .mtime .end{font-size:10.5px; color:var(--taken); margin-top:1px;}
+  .matchrow .mlogo{
+    width:36px;
+    height:36px;
+    border-radius:9px;
+    object-fit:cover;
+    flex:none;
+  }
+  .matchrow .minfo{flex:1; min-width:0;}
+  .matchrow .mteam{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:13.5px;
+    line-height:1.25;
+  }
+  .matchrow.team-tequila .mteam{color:var(--team-tequila);}
+  .matchrow.team-cotarica .mteam{color:var(--team-cotarica);}
+  .matchrow .mvs{font-size:12.5px; color:var(--ink); margin-top:1px;}
+  .matchrow .mfield{flex:none; display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .matchrow .fieldnum{
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    border:2px solid var(--taken);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:13px;
+    color:var(--ink);
+  }
+  .matchrow.team-tequila .fieldnum{border-color:var(--team-tequila); color:var(--team-tequila);}
+  .matchrow.team-cotarica .fieldnum{border-color:var(--team-cotarica); color:var(--team-cotarica);}
+  .matchrow .fieldlabel{font-size:8px; color:var(--taken); text-transform:uppercase; letter-spacing:.03em;}
+  .matchrow .mkey{flex:none; width:34px; display:flex; flex-direction:column; align-items:center; gap:1px;}
+  .matchrow .mkey .star{color:var(--amber); font-size:17px; line-height:1;}
+  .matchrow .keylabel{font-size:7.5px; color:var(--amber-dark); text-transform:uppercase; font-weight:700; letter-spacing:.02em;}
   .empty{
     text-align:center;
+
     padding:50px 20px;
     color:var(--taken);
   }
@@ -831,23 +874,38 @@ function renderPartite(){
       <div>Il programma partite non è ancora stato inserito.</div></div>`;
     return;
   }
+  const MATCH_DURATION_MIN = 100;
   const groups = groupByDay(matches);
   let html = '';
   groups.forEach(g=>{
-    html += `<div class="daygroup">
-      <div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>`;
+    html += `<div class="matchdaybar">${formatDay(g.date)}</div>`;
     g.items.forEach(m=>{
-      const logo = m.team === 'Cotarica Grandes' ? LOGO_COTARICA : (m.team === 'Tequila Boom Boom' ? LOGO_TEQUILA : '');
-      html += `<div class="matchcard ${m.important?'important':''}">
-        ${logo ? `<img class="matchlogo" src="${logo}" alt="${escapeHtml(m.team)}">` : ''}
-        <div class="matchinfo">
-          <div class="matchteam">${escapeHtml(m.team)}${m.important ? ' <span class="star">★</span>' : ''}</div>
-          <div class="matchvs">vs <b>${escapeHtml(m.opponent || '?')}</b></div>
-          <div class="matchmeta">${m.time || '?'} · Campo ${escapeHtml(m.field || '?')}</div>
+      const isTequila = m.team === 'Tequila Boom Boom';
+      const isCotarica = m.team === 'Cotarica Grandes';
+      const teamClass = isTequila ? 'team-tequila' : (isCotarica ? 'team-cotarica' : '');
+      const logo = isCotarica ? LOGO_COTARICA : (isTequila ? LOGO_TEQUILA : '');
+      const end = m.time ? addMinutes(m.time, MATCH_DURATION_MIN) : '';
+      html += `<div class="matchrow ${teamClass}">
+        <div class="mtime">
+          <div class="start">${m.time || '?'}</div>
+          ${end ? `<div class="end">~${end}</div>` : ''}
         </div>
+        ${logo ? `<img class="mlogo" src="${logo}" alt="${escapeHtml(m.team)}">` : ''}
+        <div class="minfo">
+          <div class="mteam">${escapeHtml(m.team)}</div>
+          <div class="mvs">vs ${escapeHtml(m.opponent || '?')}</div>
+        </div>
+        <div class="mfield">
+          <div class="fieldnum">${escapeHtml(m.field || '?')}</div>
+          <div class="fieldlabel">Campo</div>
+        </div>
+        ${m.important ? `
+        <div class="mkey">
+          <div class="star">★</div>
+          <div class="keylabel">Chiave</div>
+        </div>` : ''}
       </div>`;
     });
-    html += `</div>`;
   });
   main.innerHTML = html;
 }
