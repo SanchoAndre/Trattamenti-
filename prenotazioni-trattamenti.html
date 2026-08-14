@@ -216,6 +216,19 @@
     width:100%;
   }
   input:focus{border-color:var(--pitch);}
+  textarea{
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    padding:9px 11px;
+    border:1px solid var(--line);
+    border-radius:9px;
+    background:#fff;
+    color:var(--ink);
+    outline:none;
+    width:100%;
+    resize:vertical;
+  }
+  textarea:focus{border-color:var(--pitch);}
   button{
     font-family:'Inter',sans-serif;
     font-weight:600;
@@ -236,6 +249,16 @@
   .btn-danger:hover{background:#FBEFED;}
   .btn-amber{background:var(--amber); color:#26200F;}
   .btn-amber:hover{background:var(--amber-dark); color:#fff;}
+  .announcement{
+    background:var(--amber);
+    color:#26200F;
+    padding:13px 15px;
+    border-radius:var(--radius);
+    margin-bottom:16px;
+    font-size:14px;
+    font-weight:600;
+    line-height:1.45;
+  }
   .empty{
     text-align:center;
     padding:50px 20px;
@@ -471,6 +494,7 @@
 // ======================================================================
 const FIREBASE_URL = 'https://trattamenti-9d1a0-default-rtdb.europe-west1.firebasedatabase.app';
 const DATA_PATH = 'prenotazioni-trattamenti/slots';
+const MESSAGE_PATH = 'prenotazioni-trattamenti/message';
 const DIAG_PATH = 'prenotazioni-trattamenti/diag';
 
 let slots = [];
@@ -483,6 +507,7 @@ let busy = false;
 let lastSaveError = '';
 let editingAthleteId = null;
 let editingAdminId = null;
+let announcement = '';
 
 const ADMIN_USER = 'Sambruni';
 const ADMIN_PASS = 'aslimerick';
@@ -522,6 +547,42 @@ async function persistSlots(newSlots, attempt){
     if(attempt < 4){
       await new Promise(r=>setTimeout(r, 500*attempt));
       return persistSlots(newSlots, attempt+1);
+    }
+    lastSaveError = (e && e.message) ? e.message : String(e);
+    return false;
+  }
+}
+
+async function fetchMessage(){
+  if(!isConfigured()) return '';
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${MESSAGE_PATH}.json`);
+    if(!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+    const data = await res.json();
+    return typeof data === 'string' ? data : '';
+  }catch(e){
+    return '';
+  }
+}
+async function persistMessage(text, attempt){
+  attempt = attempt || 1;
+  if(!isConfigured()){
+    lastSaveError = 'App non ancora configurata: manca l\'URL del database.';
+    return false;
+  }
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${MESSAGE_PATH}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(text)
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+    lastSaveError = '';
+    return true;
+  }catch(e){
+    if(attempt < 4){
+      await new Promise(r=>setTimeout(r, 500*attempt));
+      return persistMessage(text, attempt+1);
     }
     lastSaveError = (e && e.message) ? e.message : String(e);
     return false;
@@ -585,13 +646,14 @@ function renderAtleta(){
     main.innerHTML = '<div class="spin">Carico gli orari disponibili…</div>';
     return;
   }
+  const announcementHtml = announcement ? `<div class="announcement">📣 ${escapeHtml(announcement).replace(/\n/g, '<br>')}</div>` : '';
   if(slots.length === 0){
-    main.innerHTML = `<div class="empty"><div class="icon">🕒</div>
+    main.innerHTML = announcementHtml + `<div class="empty"><div class="icon">🕒</div>
       <div>Nessuno slot è ancora stato pubblicato.<br>Torna a controllare più tardi.</div></div>`;
     return;
   }
   const groups = groupByDay(slots);
-  let html = '';
+  let html = announcementHtml;
   groups.forEach(g=>{
     const freeCount = g.items.filter(s=>!s.name).length;
     html += `<div class="daygroup">
@@ -775,6 +837,16 @@ function switchAdminView(v){
 
 function buildGestioneHtml(){
   let html = `<div class="addcard">
+      <h3>Messaggio in evidenza per gli atleti</h3>
+      <p style="margin:-6px 0 12px; font-size:12.5px; color:var(--taken);">Comparirà in alto nella schermata di prenotazione. Lascialo vuoto per non mostrare nulla.</p>
+      <textarea id="announce-text" placeholder="Es: Oggi il fisio riceve al campo 3, non in hotel." maxlength="300" rows="3">${escapeHtml(announcement || '')}</textarea>
+      <div class="rowactions" style="margin-top:9px;">
+        <button class="btn-amber" onclick="saveAnnouncement()">Salva messaggio</button>
+        ${announcement ? `<button class="btn-ghost" onclick="clearAnnouncement()">Rimuovi</button>` : ''}
+      </div>
+    </div>
+
+    <div class="addcard">
       <h3>Aggiungi uno slot</h3>
       <div class="addgrid">
         <div><label>Data</label><input type="date" id="new-date"></div>
@@ -892,6 +964,36 @@ function doLogout(){
   adminView = 'gestione';
   editingAdminId = null;
   renderAdmin();
+}
+
+async function saveAnnouncement(){
+  const text = document.getElementById('announce-text').value.trim();
+  busy = true;
+  try{
+    const ok = await persistMessage(text);
+    if(ok){ announcement = text; showToast(text ? 'Messaggio pubblicato' : 'Messaggio rimosso'); }
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+async function clearAnnouncement(){
+  if(!confirm('Rimuovere il messaggio in evidenza?')) return;
+  busy = true;
+  try{
+    const ok = await persistMessage('');
+    if(ok){ announcement = ''; showToast('Messaggio rimosso'); }
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
 }
 
 async function addSlot(){
@@ -1073,7 +1175,9 @@ function switchTab(tab){
 
 async function refresh(){
   if(busy) return;
-  slots = await fetchSlots();
+  const [newSlots, newMessage] = await Promise.all([fetchSlots(), fetchMessage()]);
+  slots = newSlots;
+  announcement = newMessage;
   loaded = true;
   if(currentTab==='atleta') renderAtleta();
   else if(isAdmin) renderAdmin();
