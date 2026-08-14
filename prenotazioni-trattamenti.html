@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prenotazioni Trattamenti</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16332C;
+    --pitch:#1C4B3E;
+    --pitch-dark:#123027;
+    --sage-bg:#F5F4EC;
+    --card:#FFFFFF;
+    --line:#E1DED0;
+    --free:#2E8B57;
+    --free-bg:#E7F3EB;
+    --taken:#8A8577;
+    --taken-bg:#EFEDE3;
+    --amber:#E8A63B;
+    --amber-dark:#C4841F;
+    --danger:#B5453D;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--sage-bg);
+    color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding-bottom:60px;
+  }
+  h1,h2,h3,.display{
+    font-family:'Space Grotesk',system-ui,sans-serif;
+  }
+  .wrap{
+    max-width:560px;
+    margin:0 auto;
+    padding:0 18px;
+  }
+  header.top{
+    background:var(--pitch);
+    color:#fff;
+    padding:28px 0 22px;
+    margin-bottom:0;
+  }
+  .eyebrow{
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:#BFE0D0;
+    font-weight:600;
+    margin:0 0 6px;
+  }
+  header.top h1{
+    font-size:24px;
+    font-weight:700;
+    margin:0;
+    line-height:1.15;
+  }
+  .tabbar{
+    display:flex;
+    gap:8px;
+    margin-top:18px;
+  }
+  .tabbtn{
+    flex:1;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.25);
+    color:#fff;
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    font-weight:600;
+    padding:9px 10px;
+    border-radius:999px;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .tabbtn.active{
+    background:var(--amber);
+    border-color:var(--amber);
+    color:#26200F;
+  }
+  .tabbtn:not(.active):hover{
+    background:rgba(255,255,255,.2);
+  }
+  main{padding-top:20px;}
+  .daygroup{margin-bottom:22px;}
+  .dayhead{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    margin:0 0 10px;
+    padding-bottom:6px;
+    border-bottom:1px solid var(--line);
+  }
+  .dayhead .dname{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    color:var(--pitch-dark);
+    text-transform:capitalize;
+  }
+  .dayhead .dcount{
+    font-size:12px;
+    color:var(--taken);
+  }
+  .slotcard{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:12px 14px;
+    margin-bottom:10px;
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+  }
+  .disc{
+    flex:none;
+    width:48px;
+    height:48px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    line-height:1;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    position:relative;
+    box-shadow:inset 0 0 0 3px rgba(255,255,255,.55), inset 0 0 0 4px rgba(0,0,0,.06);
+  }
+  .disc.free{background:var(--free); color:#fff;}
+  .disc.taken{background:var(--taken); color:#fff;}
+  .disc .n{font-size:15px;}
+  .disc .u{font-size:8px; letter-spacing:.04em; text-transform:uppercase; opacity:.9;}
+  .slotinfo{flex:1; min-width:0;}
+  .slottime{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:16.5px;
+    color:var(--ink);
+  }
+  .statuspill{
+    display:inline-block;
+    font-size:11px;
+    font-weight:600;
+    padding:2px 9px;
+    border-radius:999px;
+    margin-left:8px;
+    vertical-align:middle;
+    letter-spacing:.02em;
+  }
+  .statuspill.free{background:var(--free-bg); color:var(--free);}
+  .statuspill.taken{background:var(--taken-bg); color:var(--taken);}
+  .bookedname{
+    margin-top:4px;
+    font-size:13.5px;
+    color:var(--taken);
+  }
+  .bookedname b{color:var(--ink);}
+  .bookform{
+    margin-top:9px;
+    display:flex;
+    gap:6px;
+  }
+  input[type=text], input[type=date], input[type=time], input[type=number], input[type=password]{
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    padding:9px 11px;
+    border:1px solid var(--line);
+    border-radius:9px;
+    background:#fff;
+    color:var(--ink);
+    outline:none;
+    width:100%;
+  }
+  input:focus{border-color:var(--pitch);}
+  .bookform input{flex:1;}
+  button{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    border:none;
+    border-radius:9px;
+    padding:9px 14px;
+    cursor:pointer;
+    transition:transform .08s, opacity .15s;
+    white-space:nowrap;
+  }
+  button:active{transform:scale(.97);}
+  .btn-primary{background:var(--pitch); color:#fff;}
+  .btn-primary:hover{background:var(--pitch-dark);}
+  .btn-ghost{background:transparent; color:var(--taken); border:1px solid var(--line);}
+  .btn-ghost:hover{background:var(--sage-bg);}
+  .btn-danger{background:transparent; color:var(--danger); border:1px solid #E8CFCC;}
+  .btn-danger:hover{background:#FBEFED;}
+  .btn-amber{background:var(--amber); color:#26200F;}
+  .btn-amber:hover{background:var(--amber-dark); color:#fff;}
+  .empty{
+    text-align:center;
+    padding:50px 20px;
+    color:var(--taken);
+  }
+  .empty .icon{font-size:34px; margin-bottom:8px;}
+  .loginbox{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px 18px;
+    margin-top:20px;
+  }
+  .loginbox h3{margin:0 0 4px; font-size:17px;}
+  .loginbox p{margin:0 0 16px; font-size:13.5px; color:var(--taken);}
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--taken);
+    margin-bottom:5px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+  .loginerr{
+    color:var(--danger);
+    font-size:13px;
+    margin-top:10px;
+    display:none;
+  }
+  .adminbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+  }
+  .adminbar .who{font-size:13px; color:var(--taken);}
+  .adminbar .who b{color:var(--pitch-dark);}
+  .addcard{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:20px;
+  }
+  .addcard h3{margin:0 0 12px; font-size:15px;}
+  .addgrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .addgrid .full{grid-column:1/-1;}
+  .addgrid label{
+    display:block;
+    font-size:11px;
+    font-weight:600;
+    color:var(--taken);
+    margin-bottom:4px;
+    text-transform:uppercase;
+  }
+  .rowactions{
+    display:flex;
+    gap:6px;
+    margin-top:9px;
+  }
+  .sectiontitle{
+    font-size:13px;
+    font-weight:700;
+    color:var(--pitch-dark);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    margin:22px 0 10px;
+  }
+  .note{
+    font-size:12px;
+    color:var(--taken);
+    text-align:center;
+    margin-top:24px;
+    line-height:1.5;
+  }
+  .toast{
+    position:fixed;
+    left:50%;
+    bottom:22px;
+    transform:translateX(-50%) translateY(10px);
+    background:var(--pitch-dark);
+    color:#fff;
+    padding:11px 18px;
+    border-radius:16px;
+    font-size:13.5px;
+    font-weight:600;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .2s, transform .2s;
+    z-index:50;
+    box-shadow:0 6px 20px rgba(0,0,0,.2);
+    max-width:min(88vw, 360px);
+    width:max-content;
+    white-space:normal;
+    word-break:break-word;
+    text-align:center;
+    line-height:1.4;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; cursor:pointer;}
+  .spin{
+    text-align:center;
+    padding:40px;
+    color:var(--taken);
+    font-size:13.5px;
+  }
+  .adminsubnav{
+    display:flex;
+    gap:8px;
+    margin-bottom:18px;
+  }
+  .subtabbtn{
+    background:var(--card);
+    border:1px solid var(--line);
+    color:var(--taken);
+    font-size:13px;
+    padding:8px 14px;
+    border-radius:999px;
+  }
+  .subtabbtn.active{
+    background:var(--pitch);
+    border-color:var(--pitch);
+    color:#fff;
+  }
+  .riepilogohead{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:14px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    margin-bottom:18px;
+  }
+  .riepstat{
+    font-size:13px;
+    color:var(--taken);
+  }
+  .riepstat b{
+    font-family:'Space Grotesk',sans-serif;
+    color:var(--pitch-dark);
+    font-size:16px;
+    margin-right:4px;
+  }
+  .riepilogohead button{margin-left:auto;}
+  .riepilogotable{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .rieprow{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 14px;
+    border-bottom:1px solid var(--line);
+    font-size:14px;
+  }
+  .rieprow:last-child{border-bottom:none;}
+  .rieptime{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    color:var(--ink);
+  }
+  .riepname{
+    font-weight:600;
+    color:var(--pitch-dark);
+  }
+  .riepname.riepfree{
+    font-weight:400;
+    font-style:italic;
+    color:var(--taken);
+  }
+  @media print{
+    header.top, .no-print{ display:none !important; }
+    body{ background:#fff; padding-bottom:0; }
+    .daygroup{ break-inside:avoid; }
+  }
+  .diagcard{
+    background:var(--card);
+    border:1px dashed var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-top:24px;
+  }
+  .diagcard h3{margin:0 0 4px; font-size:14px;}
+  .diagcard p{margin:0 0 12px; font-size:12.5px; color:var(--taken);}
+  .diagline{
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:8px;
+    margin-top:8px;
+    word-break:break-word;
+  }
+  .diag-ok{background:var(--free-bg); color:var(--free);}
+  .diag-fail{background:#FBEFED; color:var(--danger);}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">Staff medico · Squadra Italia</p>
+    <h1>Prenotazioni trattamenti</h1>
+    <div class="tabbar">
+      <button class="tabbtn active" id="tab-atleta" onclick="switchTab('atleta')">Prenota un trattamento</button>
+      <button class="tabbtn" id="tab-admin" onclick="switchTab('admin')">Accesso staff</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <main id="main"></main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ======================================================================
+// CONFIGURAZIONE: incolla qui l'URL del tuo Firebase Realtime Database
+// (es. https://trattamenti-xxxx-default-rtdb.europe-west1.firebasedatabase.app)
+// ======================================================================
+const FIREBASE_URL = 'https://trattamenti-9d1a0-default-rtdb.europe-west1.firebasedatabase.app';
+const DATA_PATH = 'prenotazioni-trattamenti/slots';
+const DIAG_PATH = 'prenotazioni-trattamenti/diag';
+
+let slots = [];
+let currentTab = 'atleta';
+let isAdmin = false;
+let adminView = 'gestione';
+let loaded = false;
+let pollTimer = null;
+let busy = false;
+let lastSaveError = '';
+
+const ADMIN_USER = 'Sambruni';
+const ADMIN_PASS = 'aslimerick';
+
+function isConfigured(){
+  return FIREBASE_URL && FIREBASE_URL.indexOf('http') === 0;
+}
+
+// ---------- storage (Firebase Realtime Database REST API) ----------
+async function fetchSlots(){
+  if(!isConfigured()) return [];
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${DATA_PATH}.json`);
+    if(!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+    const data = await res.json();
+    return Array.isArray(data) ? data.filter(Boolean) : [];
+  }catch(e){
+    return [];
+  }
+}
+async function persistSlots(newSlots, attempt){
+  attempt = attempt || 1;
+  if(!isConfigured()){
+    lastSaveError = 'App non ancora configurata: manca l\'URL del database.';
+    return false;
+  }
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${DATA_PATH}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSlots)
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+    lastSaveError = '';
+    return true;
+  }catch(e){
+    if(attempt < 4){
+      await new Promise(r=>setTimeout(r, 500*attempt));
+      return persistSlots(newSlots, attempt+1);
+    }
+    lastSaveError = (e && e.message) ? e.message : String(e);
+    return false;
+  }
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._hideTimer);
+  const duration = Math.min(8000, Math.max(2200, msg.length * 70));
+  t._hideTimer = setTimeout(()=>t.classList.remove('show'), duration);
+  t.onclick = ()=>{ clearTimeout(t._hideTimer); t.classList.remove('show'); };
+}
+
+// ---------- helpers ----------
+function pad(n){ return String(n).padStart(2,'0'); }
+function addMinutes(time, mins){
+  const [h,m] = time.split(':').map(Number);
+  const total = h*60+m+Number(mins);
+  const eh = Math.floor((total%1440)/60), em = total%60;
+  return pad(eh)+':'+pad(em);
+}
+function formatDay(dateStr){
+  if(!dateStr) return 'Senza data';
+  const d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d)) return dateStr;
+  return d.toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'});
+}
+function groupByDay(list){
+  const groups = {};
+  list.forEach(s=>{
+    const key = s.date || 'zzz';
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  });
+  return Object.keys(groups).sort().map(key=>({
+    date:key, items: groups[key].sort((a,b)=> a.time.localeCompare(b.time))
+  }));
+}
+function uid(){
+  return Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+}
+
+// ---------- render: athlete ----------
+function configBanner(){
+  return `<div class="loginbox">
+    <h3>⚙️ App non ancora configurata</h3>
+    <p>Manca l'indirizzo del database. Apri il file, cerca la riga <b>FIREBASE_URL</b> in cima allo script e incolla lì l'URL del tuo Firebase Realtime Database.</p>
+  </div>`;
+}
+
+function renderAtleta(){
+  const main = document.getElementById('main');
+  if(!isConfigured()){
+    main.innerHTML = configBanner();
+    return;
+  }
+  if(!loaded){
+    main.innerHTML = '<div class="spin">Carico gli orari disponibili…</div>';
+    return;
+  }
+  if(slots.length === 0){
+    main.innerHTML = `<div class="empty"><div class="icon">🕒</div>
+      <div>Nessuno slot è ancora stato pubblicato.<br>Torna a controllare più tardi.</div></div>`;
+    return;
+  }
+  const groups = groupByDay(slots);
+  let html = '';
+  groups.forEach(g=>{
+    const freeCount = g.items.filter(s=>!s.name).length;
+    html += `<div class="daygroup">
+      <div class="dayhead">
+        <span class="dname">${formatDay(g.date)}</span>
+        <span class="dcount">${freeCount} liber${freeCount===1?'o':'i'} su ${g.items.length}</span>
+      </div>`;
+    g.items.forEach(s=>{
+      const end = addMinutes(s.time, s.duration);
+      const free = !s.name;
+      html += `<div class="slotcard">
+        <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
+        <div class="slotinfo">
+          <span class="slottime">${s.time}–${end}</span>
+          <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
+          ${free ? `
+          <div class="bookform">
+            <input type="text" id="name-${s.id}" placeholder="Nome e cognome" maxlength="60">
+            <button class="btn-primary" onclick="bookSlot('${s.id}')">Prenota</button>
+          </div>` : `
+          <div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>
+          <div class="rowactions">
+            <button class="btn-ghost" onclick="cancelBooking('${s.id}')">Annulla prenotazione</button>
+          </div>`}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  main.innerHTML = html;
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+async function bookSlot(id){
+  const input = document.getElementById('name-'+id);
+  const name = (input.value || '').trim();
+  if(!name){
+    input.focus();
+    return;
+  }
+  input.disabled = true;
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===id);
+    if(!slot){ showToast('Questo slot non esiste più.'); loaded=true; renderAtleta(); return; }
+    if(slot.name){ showToast('Slot appena occupato da un altro atleta.'); renderAtleta(); return; }
+    slot.name = name;
+    slot.bookedAt = Date.now();
+    const ok = await persistSlots(slots);
+    if(ok){ showToast('Prenotazione confermata ✓'); }
+    else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.name = null; }
+    renderAtleta();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+    renderAtleta();
+  } finally {
+    busy = false;
+  }
+}
+
+async function cancelBooking(id){
+  if(!confirm('Annullare questa prenotazione?')) return;
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===id);
+    if(!slot) return;
+    slot.name = null;
+    slot.bookedAt = null;
+    const ok = await persistSlots(slots);
+    if(ok) showToast('Prenotazione annullata');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAtleta();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+
+// ---------- render: admin ----------
+function renderAdmin(){
+  const main = document.getElementById('main');
+  if(!isAdmin){
+    main.innerHTML = `<div class="loginbox">
+      <h3>Accesso staff</h3>
+      <p>Solo per l'inserimento e la gestione degli orari disponibili.</p>
+      <div class="field"><label>Username</label><input type="text" id="login-user"></div>
+      <div class="field"><label>Password</label><input type="password" id="login-pass"></div>
+      <button class="btn-primary" style="width:100%" onclick="doLogin()">Entra</button>
+      <div class="loginerr" id="login-err">Username o password non corretti.</div>
+    </div>`;
+    const pass = document.getElementById('login-pass');
+    pass.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+    return;
+  }
+  if(!isConfigured()){
+    main.innerHTML = `<div class="adminbar">
+        <div class="who">Accesso come <b>${ADMIN_USER}</b></div>
+        <button class="btn-ghost" onclick="doLogout()">Esci</button>
+      </div>` + configBanner();
+    return;
+  }
+  if(!loaded){
+    main.innerHTML = '<div class="spin">Carico gli slot…</div>';
+    return;
+  }
+  let html = `<div class="adminbar">
+      <div class="who">Accesso come <b>${ADMIN_USER}</b></div>
+      <button class="btn-ghost no-print" onclick="doLogout()">Esci</button>
+    </div>
+    <div class="adminsubnav no-print">
+      <button class="subtabbtn ${adminView==='gestione'?'active':''}" onclick="switchAdminView('gestione')">Gestione slot</button>
+      <button class="subtabbtn ${adminView==='riepilogo'?'active':''}" onclick="switchAdminView('riepilogo')">Riepilogo</button>
+    </div>`;
+
+  html += adminView === 'riepilogo' ? buildRiepilogoHtml() : buildGestioneHtml();
+  main.innerHTML = html;
+}
+
+function switchAdminView(v){
+  adminView = v;
+  renderAdmin();
+}
+
+function buildGestioneHtml(){
+  let html = `<div class="addcard">
+      <h3>Aggiungi uno slot</h3>
+      <div class="addgrid">
+        <div><label>Data</label><input type="date" id="new-date"></div>
+        <div><label>Orario</label><input type="time" id="new-time"></div>
+        <div class="full"><label>Durata (minuti)</label><input type="number" id="new-dur" value="30" min="5" step="5"></div>
+      </div>
+      <button class="btn-amber" style="width:100%" onclick="addSlot()">Aggiungi slot</button>
+    </div>
+
+    <div class="addcard">
+      <h3>Genera più slot in sequenza</h3>
+      <p style="margin:-6px 0 12px; font-size:12.5px; color:var(--taken);">Crea automaticamente uno slot ogni X minuti, dall'ora di inizio all'ora di fine.</p>
+      <div class="addgrid">
+        <div class="full"><label>Data</label><input type="date" id="bulk-date"></div>
+        <div><label>Dalle ore</label><input type="time" id="bulk-start"></div>
+        <div><label>Alle ore</label><input type="time" id="bulk-end"></div>
+        <div><label>Uno ogni (min)</label><input type="number" id="bulk-every" value="30" min="5" step="5"></div>
+        <div><label>Durata slot (min)</label><input type="number" id="bulk-dur" value="30" min="5" step="5"></div>
+      </div>
+      <button class="btn-amber" style="width:100%" onclick="generateSlots()">Genera slot</button>
+    </div>`;
+
+  if(slots.length===0){
+    html += `<div class="empty"><div class="icon">📋</div>Non hai ancora inserito slot.</div>`;
+  } else {
+    html += `<div class="sectiontitle">Slot inseriti (${slots.length})</div>`;
+    const groups = groupByDay(slots);
+    groups.forEach(g=>{
+      html += `<div class="daygroup"><div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>`;
+      g.items.forEach(s=>{
+        const end = addMinutes(s.time, s.duration);
+        const free = !s.name;
+        html += `<div class="slotcard">
+          <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
+          <div class="slotinfo">
+            <span class="slottime">${s.time}–${end}</span>
+            <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
+            ${!free ? `<div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>` : ''}
+            <div class="rowactions">
+              ${!free ? `<button class="btn-ghost" onclick="cancelBooking('${s.id}')">Libera slot</button>` : ''}
+              <button class="btn-danger" onclick="deleteSlot('${s.id}')">Elimina</button>
+            </div>
+          </div>
+        </div>`;
+      });
+      html += `</div>`;
+    });
+  }
+  html += `<div class="diagcard">
+      <h3>Problemi di connessione?</h3>
+      <p>Esegue un test diretto di lettura e scrittura sul database Firebase, e mostra l'esito reale.</p>
+      <button class="btn-ghost" onclick="runDiagnostics()">Esegui diagnostica</button>
+      <div id="diag-result"></div>
+    </div>`;
+  return html;
+}
+
+function buildRiepilogoHtml(){
+  if(slots.length===0){
+    return `<div class="empty"><div class="icon">📋</div>Non ci sono slot da riepilogare.</div>`;
+  }
+  const total = slots.length;
+  const booked = slots.filter(s=>s.name).length;
+  let html = `<div class="riepilogohead no-print">
+      <div class="riepstat"><b>${total}</b> slot totali</div>
+      <div class="riepstat"><b>${booked}</b> prenotati</div>
+      <div class="riepstat"><b>${total-booked}</b> liberi</div>
+      <button class="btn-ghost" onclick="window.print()">Stampa</button>
+    </div>`;
+  const groups = groupByDay(slots);
+  groups.forEach(g=>{
+    html += `<div class="daygroup"><div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>
+      <div class="riepilogotable">`;
+    g.items.forEach(s=>{
+      const end = addMinutes(s.time, s.duration);
+      html += `<div class="rieprow">
+        <span class="rieptime">${s.time}–${end}</span>
+        <span class="riepname ${s.name?'':'riepfree'}">${s.name ? escapeHtml(s.name) : 'Libero'}</span>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  return html;
+}
+
+
+function doLogin(){
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  if(u === ADMIN_USER && p === ADMIN_PASS){
+    isAdmin = true;
+    document.getElementById('login-err').style.display = 'none';
+    renderAdmin();
+  } else {
+    document.getElementById('login-err').style.display = 'block';
+  }
+}
+function doLogout(){
+  isAdmin = false;
+  adminView = 'gestione';
+  renderAdmin();
+}
+
+async function addSlot(){
+  const date = document.getElementById('new-date').value;
+  const time = document.getElementById('new-time').value;
+  const dur = Number(document.getElementById('new-dur').value);
+  if(!date || !time || !dur || dur<=0){
+    showToast('Compila data, orario e durata.');
+    return;
+  }
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    slots.push({ id: uid(), date, time, duration: dur, name: null, bookedAt: null });
+    const ok = await persistSlots(slots);
+    if(ok) showToast('Slot aggiunto');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+function timeToMin(t){ const [h,m] = t.split(':').map(Number); return h*60+m; }
+
+async function generateSlots(){
+  const date = document.getElementById('bulk-date').value;
+  const start = document.getElementById('bulk-start').value;
+  const end = document.getElementById('bulk-end').value;
+  const every = Number(document.getElementById('bulk-every').value);
+  const dur = Number(document.getElementById('bulk-dur').value);
+
+  if(!date || !start || !end || !every || every<=0 || !dur || dur<=0){
+    showToast('Compila tutti i campi correttamente.');
+    return;
+  }
+  const startMin = timeToMin(start);
+  const endMin = timeToMin(end);
+  if(endMin < startMin){
+    showToast('L\'ora di fine deve essere uguale o dopo l\'ora di inizio.');
+    return;
+  }
+
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const existingTimes = new Set(slots.filter(s=>s.date===date).map(s=>s.time));
+
+    const toAdd = [];
+    let skipped = 0;
+    // do-while: se inizio e fine coincidono, genera comunque un unico slot
+    let m = startMin;
+    do{
+      const t = pad(Math.floor(m/60))+':'+pad(m%60);
+      if(existingTimes.has(t)){ skipped++; }
+      else{
+        toAdd.push({ id: uid(), date, time: t, duration: dur, name: null, bookedAt: null });
+        existingTimes.add(t);
+      }
+      m += every;
+    } while(m < endMin);
+
+    if(toAdd.length === 0){
+      showToast(skipped>0 ? 'Tutti quegli orari esistevano già.' : 'Nessuno slot generato.');
+      return;
+    }
+
+    slots = slots.concat(toAdd);
+    const ok = await persistSlots(slots);
+    if(ok){
+      showToast(`${toAdd.length} slot aggiunti` + (skipped>0 ? ` (${skipped} già esistenti, saltati)` : ''));
+    } else {
+      showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    }
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+async function deleteSlot(id){
+  if(!confirm('Eliminare definitivamente questo slot?')) return;
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    slots = slots.filter(s=>s.id!==id);
+    const ok = await persistSlots(slots);
+    if(ok) showToast('Slot eliminato');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+async function runDiagnostics(){
+  const box = document.getElementById('diag-result');
+
+  if(!isConfigured()){
+    box.innerHTML = '<div class="diagline diag-fail">✗ URL del database non ancora configurato. Incolla l\'URL di Firebase nella riga FIREBASE_URL in cima al file.</div>';
+    return;
+  }
+
+  box.innerHTML = '<div class="diagline">Test in corso…</div>';
+  const lines = [];
+  const val = String(Date.now());
+
+  try{
+    const setRes = await fetch(`${FIREBASE_URL}/${DIAG_PATH}.json`, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(val)
+    });
+    if(!setRes.ok) throw new Error('scrittura: HTTP ' + setRes.status + ' ' + setRes.statusText);
+
+    const getRes = await fetch(`${FIREBASE_URL}/${DIAG_PATH}.json`);
+    if(!getRes.ok) throw new Error('lettura: HTTP ' + getRes.status + ' ' + getRes.statusText);
+    const data = await getRes.json();
+    if(data !== val) throw new Error('la rilettura non corrisponde al valore scritto');
+
+    lines.push('<div class="diagline diag-ok">✓ Connessione a Firebase: lettura e scrittura funzionano</div>');
+  }catch(e){
+    lines.push(`<div class="diagline diag-fail">✗ Connessione a Firebase: ${escapeHtml((e && e.message) ? e.message : String(e))}</div>`);
+  }
+
+  box.innerHTML = lines.join('');
+}
+
+function switchTab(tab){
+  currentTab = tab;
+  document.getElementById('tab-atleta').classList.toggle('active', tab==='atleta');
+  document.getElementById('tab-admin').classList.toggle('active', tab==='admin');
+  if(tab==='atleta') renderAtleta(); else renderAdmin();
+}
+
+async function refresh(){
+  if(busy) return;
+  slots = await fetchSlots();
+  loaded = true;
+  if(currentTab==='atleta') renderAtleta();
+  else if(isAdmin) renderAdmin();
+}
+
+(async function init(){
+  renderAtleta();
+  await refresh();
+  pollTimer = setInterval(async ()=>{
+    const active = document.activeElement;
+    const typing = active && typeof active.matches === 'function' && active.matches('input');
+    if(currentTab==='atleta' && !typing && !busy){
+      await refresh();
+    }
+  }, 8000);
+})();
+</script>
+</body>
+</html>
