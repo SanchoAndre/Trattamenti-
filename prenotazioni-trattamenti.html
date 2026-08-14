@@ -443,6 +443,8 @@ let loaded = false;
 let pollTimer = null;
 let busy = false;
 let lastSaveError = '';
+let editingAthleteId = null;
+let editingAdminId = null;
 
 const ADMIN_USER = 'Sambruni';
 const ADMIN_PASS = 'aslimerick';
@@ -562,6 +564,7 @@ function renderAtleta(){
     g.items.forEach(s=>{
       const end = addMinutes(s.time, s.duration);
       const free = !s.name;
+      const editing = editingAthleteId === s.id;
       html += `<div class="slotcard">
         <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
         <div class="slotinfo">
@@ -571,10 +574,18 @@ function renderAtleta(){
           <div class="bookform">
             <input type="text" id="name-${s.id}" placeholder="Nome e cognome" maxlength="60">
             <button class="btn-primary" onclick="bookSlot('${s.id}')">Prenota</button>
+          </div>` : editing ? `
+          <div class="bookform">
+            <input type="text" id="editname-${s.id}" placeholder="Nome e cognome" maxlength="60" value="${escapeHtml(s.name)}">
+            <button class="btn-primary" onclick="saveNameEdit('${s.id}')">Salva</button>
+          </div>
+          <div class="rowactions">
+            <button class="btn-ghost" onclick="toggleEditAthlete(null)">Annulla modifica</button>
           </div>` : `
           <div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>
           <div class="rowactions">
-            <button class="btn-ghost" onclick="cancelBooking('${s.id}')">Annulla prenotazione</button>
+            <button class="btn-ghost" onclick="toggleEditAthlete('${s.id}')">Cambia nome</button>
+            <button class="btn-danger" onclick="cancelBooking('${s.id}')">Annulla prenotazione</button>
           </div>`}
         </div>
       </div>`;
@@ -630,6 +641,36 @@ async function cancelBooking(id){
     const ok = await persistSlots(slots);
     if(ok) showToast('Prenotazione annullata');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAtleta();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+function toggleEditAthlete(id){
+  editingAthleteId = id;
+  renderAtleta();
+}
+
+async function saveNameEdit(id){
+  const input = document.getElementById('editname-'+id);
+  const name = (input.value || '').trim();
+  if(!name){
+    input.focus();
+    return;
+  }
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===id);
+    if(!slot){ showToast('Questo slot non esiste più.'); editingAthleteId = null; renderAtleta(); return; }
+    slot.name = name;
+    const ok = await persistSlots(slots);
+    if(ok) showToast('Nome aggiornato ✓');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    editingAthleteId = null;
     renderAtleta();
   } catch(e){
     showToast('Errore: ' + e.message);
@@ -718,16 +759,29 @@ function buildGestioneHtml(){
       g.items.forEach(s=>{
         const end = addMinutes(s.time, s.duration);
         const free = !s.name;
+        const editing = editingAdminId === s.id;
         html += `<div class="slotcard">
           <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
           <div class="slotinfo">
+            ${editing ? `
+            <div class="addgrid" style="margin-top:2px;">
+              <div><label>Data</label><input type="date" id="edit-date-${s.id}" value="${s.date}"></div>
+              <div><label>Orario</label><input type="time" id="edit-time-${s.id}" value="${s.time}"></div>
+              <div><label>Durata (min)</label><input type="number" id="edit-dur-${s.id}" value="${s.duration}" min="5" step="5"></div>
+              <div><label>Nome (vuoto = libero)</label><input type="text" id="edit-name-${s.id}" value="${s.name ? escapeHtml(s.name) : ''}" maxlength="60"></div>
+            </div>
+            <div class="rowactions">
+              <button class="btn-primary" onclick="saveAdminEdit('${s.id}')">Salva modifiche</button>
+              <button class="btn-ghost" onclick="toggleEditAdmin(null)">Annulla</button>
+            </div>` : `
             <span class="slottime">${s.time}–${end}</span>
             <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
             ${!free ? `<div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>` : ''}
             <div class="rowactions">
+              <button class="btn-ghost" onclick="toggleEditAdmin('${s.id}')">Modifica</button>
               ${!free ? `<button class="btn-ghost" onclick="cancelBooking('${s.id}')">Libera slot</button>` : ''}
               <button class="btn-danger" onclick="deleteSlot('${s.id}')">Elimina</button>
-            </div>
+            </div>`}
           </div>
         </div>`;
       });
@@ -786,6 +840,7 @@ function doLogin(){
 function doLogout(){
   isAdmin = false;
   adminView = 'gestione';
+  editingAdminId = null;
   renderAdmin();
 }
 
@@ -880,6 +935,42 @@ async function deleteSlot(id){
     const ok = await persistSlots(slots);
     if(ok) showToast('Slot eliminato');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+function toggleEditAdmin(id){
+  editingAdminId = id;
+  renderAdmin();
+}
+
+async function saveAdminEdit(id){
+  const date = document.getElementById('edit-date-'+id).value;
+  const time = document.getElementById('edit-time-'+id).value;
+  const dur = Number(document.getElementById('edit-dur-'+id).value);
+  const name = document.getElementById('edit-name-'+id).value.trim();
+  if(!date || !time || !dur || dur<=0){
+    showToast('Compila data, orario e durata.');
+    return;
+  }
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===id);
+    if(!slot){ showToast('Questo slot non esiste più.'); editingAdminId = null; renderAdmin(); return; }
+    slot.date = date;
+    slot.time = time;
+    slot.duration = dur;
+    slot.name = name || null;
+    if(!name) slot.bookedAt = null;
+    const ok = await persistSlots(slots);
+    if(ok) showToast('Slot aggiornato');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    editingAdminId = null;
     renderAdmin();
   } catch(e){
     showToast('Errore: ' + e.message);
