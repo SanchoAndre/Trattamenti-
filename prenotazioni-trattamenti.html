@@ -294,6 +294,28 @@
     font-weight:600;
     line-height:1.45;
   }
+  .partitefilters{margin-bottom:6px;}
+  .filterrow{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-bottom:8px;
+  }
+  .filterpill{
+    background:var(--card);
+    border:1px solid var(--line);
+    color:var(--taken);
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    font-weight:600;
+    padding:6px 12px;
+    border-radius:999px;
+  }
+  .filterpill.active{
+    background:var(--pitch);
+    border-color:var(--pitch);
+    color:#fff;
+  }
   .matchdaybar{
     background:var(--pitch-dark);
     color:#fff;
@@ -625,6 +647,8 @@ let editingAdminId = null;
 let announcement = '';
 let matches = [];
 let editingMatchId = null;
+let partiteFilterTeam = 'tutte';
+let partiteFilterDay = 'tutti';
 
 const ADMINS = [
   { user: 'Sambruni', pass: 'aslimerick', name: 'Sambruni' },
@@ -874,9 +898,33 @@ function renderPartite(){
       <div>Il programma partite non è ancora stato inserito.</div></div>`;
     return;
   }
+
+  const teams = [...new Set(matches.map(m=>m.team).filter(Boolean))];
+  const days = [...new Set(matches.map(m=>m.date).filter(Boolean))].sort();
+
+  let html = `<div class="partitefilters">
+    <div class="filterrow">
+      <button class="filterpill ${partiteFilterTeam==='tutte'?'active':''}" onclick="setPartiteFilterTeam('tutte')">Tutte le squadre</button>
+      ${teams.map(t=>`<button class="filterpill ${partiteFilterTeam===t?'active':''}" onclick="setPartiteFilterTeam('${escapeJs(t)}')">${escapeHtml(t)}</button>`).join('')}
+    </div>
+    <div class="filterrow">
+      <button class="filterpill ${partiteFilterDay==='tutti'?'active':''}" onclick="setPartiteFilterDay('tutti')">Tutti i giorni</button>
+      ${days.map(d=>`<button class="filterpill ${partiteFilterDay===d?'active':''}" onclick="setPartiteFilterDay('${d}')">${formatDayShort(d)}</button>`).join('')}
+    </div>
+  </div>`;
+
+  let filtered = matches;
+  if(partiteFilterTeam !== 'tutte') filtered = filtered.filter(m=>m.team===partiteFilterTeam);
+  if(partiteFilterDay !== 'tutti') filtered = filtered.filter(m=>m.date===partiteFilterDay);
+
+  if(filtered.length === 0){
+    html += `<div class="empty"><div class="icon">🥏</div><div>Nessuna partita corrisponde ai filtri scelti.</div></div>`;
+    main.innerHTML = html;
+    return;
+  }
+
   const MATCH_DURATION_MIN = 100;
-  const groups = groupByDay(matches);
-  let html = '';
+  const groups = groupByDay(filtered);
   groups.forEach(g=>{
     html += `<div class="matchdaybar">${formatDay(g.date)}</div>`;
     g.items.forEach(m=>{
@@ -908,6 +956,24 @@ function renderPartite(){
     });
   });
   main.innerHTML = html;
+}
+
+function setPartiteFilterTeam(v){
+  partiteFilterTeam = v;
+  renderPartite();
+}
+function setPartiteFilterDay(v){
+  partiteFilterDay = v;
+  renderPartite();
+}
+function formatDayShort(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d)) return dateStr;
+  const s = d.toLocaleDateString('it-IT', {weekday:'short', day:'numeric', month:'numeric'});
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function escapeJs(str){
+  return String(str).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
 
 function escapeHtml(str){
