@@ -1657,13 +1657,14 @@ function renderAtletaContent(main, authHtml, viewOnly){
     return;
   }
   const announcementHtml = announcement ? `<div class="announcement">📣 ${escapeHtml(announcement).replace(/\n/g, '<br>')}</div>` : '';
-  if(slots.length === 0){
+  const activeSlots = slots.filter(s=>!s.done);
+  if(activeSlots.length === 0){
     main.innerHTML = authHtml + announcementHtml + `<div class="empty"><div class="icon">🕒</div>
       <div>Nessuno slot è ancora stato pubblicato.<br>Torna a controllare più tardi.</div></div>`;
     return;
   }
 
-  const days = [...new Set(slots.map(s=>s.date).filter(Boolean))].sort();
+  const days = [...new Set(activeSlots.map(s=>s.date).filter(Boolean))].sort();
   const filterHtml = `<div class="partitefilters">
     <div class="filterrow">
       <button class="filterpill ${slotFilterDay==='tutti'?'active':''}" onclick="setSlotFilterDay('tutti')">Tutti i giorni</button>
@@ -1677,7 +1678,7 @@ function renderAtletaContent(main, authHtml, viewOnly){
     </div>
   </div>`;
 
-  let filtered = slots;
+  let filtered = activeSlots;
   if(slotFilterDay !== 'tutti') filtered = filtered.filter(s=>s.date===slotFilterDay);
   if(slotFilterPeriod !== 'tutti') filtered = filtered.filter(s=>getPeriod(s.time)===slotFilterPeriod);
 
@@ -2083,10 +2084,11 @@ function renderAdmin(){
     <div class="adminsubnav no-print">
       <button class="subtabbtn ${adminView==='gestione'?'active':''}" onclick="switchAdminView('gestione')">Slot</button>
       <button class="subtabbtn ${adminView==='partite'?'active':''}" onclick="switchAdminView('partite')">Partite</button>
+      <button class="subtabbtn ${adminView==='svolti'?'active':''}" onclick="switchAdminView('svolti')">Trattamenti svolti</button>
       <button class="subtabbtn ${adminView==='riepilogo'?'active':''}" onclick="switchAdminView('riepilogo')">Riepilogo</button>
     </div>`;
 
-  html += adminView === 'riepilogo' ? buildRiepilogoHtml() : (adminView === 'partite' ? buildPartiteAdminHtml() : buildGestioneHtml());
+  html += adminView === 'riepilogo' ? buildRiepilogoHtml() : (adminView === 'partite' ? buildPartiteAdminHtml() : (adminView === 'svolti' ? buildSvoltiHtml() : buildGestioneHtml()));
   main.innerHTML = html;
   initAutoGrow();
 }
@@ -2351,6 +2353,39 @@ async function deleteMatch(id){
   }
 }
 
+function buildSvoltiHtml(){
+  const doneSlots = slots.filter(s=>s.done);
+  let html = '';
+  if(doneSlots.length===0){
+    html += `<div class="empty"><div class="icon">✅</div>Nessun trattamento ancora segnato come svolto.</div>`;
+    return html;
+  }
+  html += `<div class="sectiontitle">Trattamenti svolti (${doneSlots.length})</div>`;
+  const groups = groupByDay(doneSlots);
+  groups.forEach(g=>{
+    html += `<div class="daygroup"><div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>`;
+    g.items.forEach(s=>{
+      const end = addMinutes(s.time, s.duration);
+      html += `<div class="slotcard">
+        <div class="disc done"><span class="n">${s.duration}</span><span class="u">min</span></div>
+        <div class="slotinfo">
+          <span class="slottime">${s.time}–${end}</span>
+          <span class="statuspill done">Svolto ✓</span>
+          ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
+          ${s.name ? `<div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>` : ''}
+          ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
+          <div class="rowactions">
+            <button class="btn-ghost" onclick="toggleDone('${s.id}')">Segna non svolto</button>
+            <button class="btn-danger" onclick="deleteSlot('${s.id}')">Elimina</button>
+          </div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  return html;
+}
+
 function buildGestioneHtml(){
   let html = `<div class="addcard">
       <h3>Messaggio in evidenza per gli atleti</h3>
@@ -2387,11 +2422,12 @@ function buildGestioneHtml(){
       <button class="btn-amber" style="width:100%" onclick="generateSlots()">Genera slot</button>
     </div>`;
 
-  if(slots.length===0){
+  const activeSlots = slots.filter(s=>!s.done);
+  if(activeSlots.length===0){
     html += `<div class="empty"><div class="icon">📋</div>Non hai ancora inserito slot.</div>`;
   } else {
-    html += `<div class="sectiontitle">Slot inseriti (${slots.length})</div>`;
-    const groups = groupByDay(slots);
+    html += `<div class="sectiontitle">Slot inseriti (${activeSlots.length})</div>`;
+    const groups = groupByDay(activeSlots);
     groups.forEach(g=>{
       html += `<div class="daygroup"><div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>`;
       g.items.forEach(s=>{
