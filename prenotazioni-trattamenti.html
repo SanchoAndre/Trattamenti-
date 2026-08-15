@@ -410,6 +410,9 @@
   .mscore.win{color:var(--free);}
   .mscore.loss{color:var(--danger);}
   .mscore.tie{color:var(--taken);}
+  .mscore.live{color:var(--amber-dark);}
+  .mscore.live .mresult{color:var(--amber-dark); animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.85;} 50%{opacity:.4;}}
   .mresult{
     font-family:'Inter',sans-serif;
     font-weight:700;
@@ -1346,11 +1349,30 @@ function buildPartiteAdminHtml(){
   return html;
 }
 
+function getMatchStatus(m){
+  if(!m.date || !m.time) return null;
+  const MATCH_DURATION_MIN = 100;
+  const start = new Date(m.date+'T'+m.time+':00');
+  if(isNaN(start.getTime())) return null;
+  const end = new Date(start.getTime() + MATCH_DURATION_MIN*60000);
+  const now = new Date();
+  return (now >= start && now <= end) ? 'live' : null;
+}
+
 function matchScoreHtml(m){
   const hasScore = m.scoreUs !== null && m.scoreUs !== undefined && m.scoreOpp !== null && m.scoreOpp !== undefined;
+  const live = getMatchStatus(m) === 'live';
+
+  if(live){
+    const scoreText = hasScore ? `${m.scoreUs} – ${m.scoreOpp} ` : '';
+    return `<div class="mscore live">${scoreText}<span class="mresult">● In corso</span></div>`;
+  }
   if(!hasScore) return '';
-  const result = m.scoreUs > m.scoreOpp ? 'win' : (m.scoreUs < m.scoreOpp ? 'loss' : 'tie');
-  const label = result==='win' ? 'Vinta' : (result==='loss' ? 'Persa' : 'Pareggio');
+  if(m.scoreUs === m.scoreOpp){
+    return `<div class="mscore tie">${m.scoreUs} – ${m.scoreOpp}</div>`;
+  }
+  const result = m.scoreUs > m.scoreOpp ? 'win' : 'loss';
+  const label = result==='win' ? 'Vinta' : 'Persa';
   return `<div class="mscore ${result}">${m.scoreUs} – ${m.scoreOpp} <span class="mresult">${label}</span></div>`;
 }
 
