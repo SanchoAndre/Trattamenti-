@@ -325,6 +325,23 @@
     font-weight:600;
     line-height:1.45;
   }
+  .reminderbox{
+    background:var(--sage-bg);
+    border:1px solid var(--pitch);
+    border-radius:var(--radius);
+    padding:11px 14px;
+    margin-bottom:12px;
+  }
+  .reminderline{
+    font-size:13.5px;
+    color:var(--pitch-dark);
+    line-height:1.5;
+  }
+  .reminderline + .reminderline{
+    margin-top:6px;
+    padding-top:6px;
+    border-top:1px solid rgba(0,0,0,0.08);
+  }
   .mapblock{margin-bottom:14px;}
   .campmap{
     width:100%;
@@ -1651,7 +1668,25 @@ function renderAtleta(){
   renderAtletaContent(main, authHtml, false);
 }
 
+function renderUpcomingReminder(){
+  if(!currentUser) return '';
+  const now = new Date();
+  const mine = slots.filter(s=>{
+    if(!s.bookedByUid || s.bookedByUid !== currentUser.uid) return false;
+    if(!s.date || !s.time) return false;
+    const end = addMinutes(s.time, s.duration || 0);
+    const endMoment = new Date(`${s.date}T${end}:00`);
+    if(isNaN(endMoment.getTime())) return true;
+    return endMoment.getTime() >= now.getTime();
+  }).sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
+  if(mine.length === 0) return '';
+  return `<div class="reminderbox">
+    ${mine.map(s=>`<div class="reminderline">⏰ <b>Promemoria:</b> il tuo trattamento è <b>${formatDayShort(s.date)}</b> alle <b>${s.time}</b>${s.physio?` con ${escapeHtml(s.physio)}`:''}</div>`).join('')}
+  </div>`;
+}
+
 function renderAtletaContent(main, authHtml, viewOnly){
+  if(!viewOnly) authHtml += renderUpcomingReminder();
   if(!loaded){
     main.innerHTML = authHtml + '<div class="spin">Carico gli orari disponibili…</div>';
     return;
