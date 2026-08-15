@@ -942,6 +942,8 @@ let userProfile = null;      // { username, gender, team, photo } da RTDB, o nul
 let authView = null;         // null | 'login' | 'register' | 'completeProfile'
 let authError = '';
 let pendingPhotoData = null; // foto profilo ridimensionata, in attesa di salvataggio
+let accountPanelOpen = false;
+let accountError = '';
 
 const ADMINS = [
   { user: 'Sambruni', pass: 'aslimerick', name: 'Sambruni', authEmail: 'sambruni@trattamenti-app.internal' },
@@ -1364,6 +1366,8 @@ async function doAthleteLogout(){
   currentUser = null;
   userProfile = null;
   authView = null;
+  accountPanelOpen = false;
+  accountError = '';
   renderAtleta();
 }
 
@@ -1439,8 +1443,63 @@ function renderAuthBar(){
   return `<div class="authbar">
     ${photo ? `<img class="avatarimg" src="${photo}" alt="">` : '<span class="avatarimg avatarplaceholder">👤</span>'}
     <span>Ciao, <b>${escapeHtml(name)}</b></span>
+    <button class="btn-ghost" onclick="toggleAccountPanel()">${accountPanelOpen ? 'Chiudi' : '⚙️ Account'}</button>
     <button class="btn-ghost" onclick="doAthleteLogout()">Esci</button>
   </div>`;
+}
+
+function renderAccountPanel(){
+  if(!accountPanelOpen || !userProfile) return '';
+  const photo = safePhotoSrc(pendingPhotoData || (userProfile && userProfile.photo) || '');
+  const errHtml = accountError ? `<div class="autherror">${escapeHtml(accountError)}</div>` : '';
+  return `<div class="authmodal" style="margin-bottom:10px;">
+    <h3>Il mio account</h3>
+    ${errHtml}
+    <div class="photopicker">
+      <img id="photo-preview" class="avatarimg avatarbig" src="${photo}" alt="" style="${photo?'':'display:none;'}">
+      <label class="btn-ghost photobtn">📷 Cambia foto profilo
+        <input type="file" accept="image/*" style="display:none" onchange="handleProfilePhoto(this)">
+      </label>
+    </div>
+    <label>Nome utente</label>
+    <input type="text" id="account-username" value="${escapeHtml(userProfile.username || '')}" maxlength="40" placeholder="Nome e cognome">
+    <button class="btn-primary" style="width:100%; margin-top:12px;" onclick="saveAccountChanges()">Salva modifiche</button>
+  </div>`;
+}
+
+function toggleAccountPanel(){
+  accountPanelOpen = !accountPanelOpen;
+  accountError = '';
+  pendingPhotoData = null;
+  renderAtleta();
+}
+
+async function saveAccountChanges(){
+  const username = document.getElementById('account-username').value.trim();
+  accountError = '';
+  if(!username){
+    accountError = 'Inserisci un nome utente.';
+    renderAtleta();
+    return;
+  }
+  const updatedProfile = {
+    username,
+    gender: userProfile.gender || null,
+    team: userProfile.team || null,
+    photo: pendingPhotoData || userProfile.photo || null,
+    email: userProfile.email || (currentUser && currentUser.email) || null
+  };
+  const ok = await saveUserProfile(currentUser.uid, updatedProfile);
+  if(ok){
+    userProfile = updatedProfile;
+    pendingPhotoData = null;
+    accountPanelOpen = false;
+    showToast('Account aggiornato ✓');
+    renderAtleta();
+  } else {
+    accountError = 'Errore nel salvataggio, riprova.';
+    renderAtleta();
+  }
 }
 
 function renderAuthGate(){
@@ -1567,7 +1626,7 @@ function renderAtleta(){
     main.innerHTML = renderAuthGate();
     return;
   }
-  const authHtml = renderAuthBar();
+  const authHtml = renderAuthBar() + renderAccountPanel();
   renderAtletaContent(main, authHtml, false);
 }
 
