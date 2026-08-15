@@ -342,6 +342,18 @@
     padding-top:6px;
     border-top:1px solid rgba(0,0,0,0.08);
   }
+  .teamslogos{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:22px;
+    margin-bottom:14px;
+  }
+  .teamlogo{
+    width:64px;
+    height:64px;
+    object-fit:contain;
+  }
   .mapblock{margin-bottom:14px;}
   .campmap{
     width:100%;
@@ -1852,8 +1864,12 @@ function renderPartite(){
     main.innerHTML = '<div class="spin">Carico il programma partite…</div>';
     return;
   }
+  const logosHtml = `<div class="teamslogos">
+    <img src="${LOGO_TEQUILA}" alt="Tequila Boom Boom" class="teamlogo">
+    <img src="${LOGO_COTARICA}" alt="Cotarica Grandes" class="teamlogo">
+  </div>`;
   const markerHtml = (highlightedField && FIELD_COORDS[highlightedField]) ? `<div class="fieldmarker" style="left:${(FIELD_COORDS[highlightedField][0]/MAP_IMG_W*100).toFixed(2)}%; top:${(FIELD_COORDS[highlightedField][1]/MAP_IMG_H*100).toFixed(2)}%;"></div>` : '';
-  const mapHtml = `<div class="mapblock">
+  const mapHtml = logosHtml + `<div class="mapblock">
     <button class="btn-ghost" style="width:100%" onclick="toggleMap()">${mapVisible ? 'Nascondi mappa campi' : '🗺️ Mostra mappa campi'}</button>
     ${mapVisible ? `<div class="mapwrap"><img class="campmap" src="${MAP_CAMPI}" alt="Mappa campi UL Campus">${markerHtml}</div>` : ''}
   </div>`;
