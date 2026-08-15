@@ -2773,10 +2773,32 @@ function switchTab(tab){
   else renderAdmin();
 }
 
+async function pruneExpiredFreeSlots(currentSlots){
+  const now = new Date();
+  let removedAny = false;
+  const kept = currentSlots.filter(s=>{
+    if(s.name) return true; // non tocco mai uno slot prenotato
+    if(!s.date || !s.time) return true; // dati incompleti: per sicurezza non lo elimino
+    const end = addMinutes(s.time, s.duration || 0);
+    const endMoment = new Date(`${s.date}T${end}:00`);
+    if(isNaN(endMoment.getTime())) return true;
+    if(endMoment.getTime() < now.getTime()){
+      removedAny = true;
+      return false;
+    }
+    return true;
+  });
+  if(removedAny){
+    const ok = await persistSlots(kept);
+    if(ok) return kept;
+  }
+  return currentSlots;
+}
+
 async function refresh(){
   if(busy) return;
   const [newSlots, newMessage, newMatches] = await Promise.all([fetchSlots(), fetchMessage(), fetchMatches()]);
-  slots = newSlots;
+  slots = await pruneExpiredFreeSlots(newSlots);
   announcement = newMessage;
   matches = newMatches;
   loaded = true;
