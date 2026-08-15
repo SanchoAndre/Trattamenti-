@@ -1178,6 +1178,10 @@ function initAuth(){
   try{
     if(!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.indexOf('INCOLLA') === 0) return;
     firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.auth().getRedirectResult().catch((e)=>{
+      authError = translateAuthError(e);
+      renderAtleta();
+    });
     firebase.auth().onAuthStateChanged(async (user)=>{
       currentUser = user;
       if(user){
@@ -1235,7 +1239,7 @@ async function handleProfilePhoto(input){
     const preview = document.getElementById('photo-preview');
     if(preview){ preview.src = pendingPhotoData; preview.style.display = ''; }
   }catch(e){
-    showToast('Impossibile caricare questa immagine.');
+    showToast('Foto non caricata (formato non supportato da questo browser, es. HEIC di iPhone). Puoi continuare senza foto o riprovare con un\'altra immagine.');
   }
 }
 
@@ -1264,7 +1268,7 @@ async function doRegisterEmail(){
     });
     userProfile = { username, gender: gender ? gender.value : null, team, photo: pendingPhotoData || null, email };
     if(!ok) showToast('Account creato, ma il profilo non si è salvato: riprova a completarlo.');
-    else showToast('Account creato! Controlla la tua email per il link di verifica.');
+    else showToast('Account creato! Controlla la tua email (anche nello spam) per il link di verifica.');
     authView = null;
     renderAtleta();
   }catch(e){
@@ -1296,7 +1300,7 @@ async function doGoogleSignIn(){
   authError = '';
   try{
     const provider = new firebase.auth.GoogleAuthProvider();
-    await firebase.auth().signInWithPopup(provider);
+    await firebase.auth().signInWithRedirect(provider);
   }catch(e){
     authError = translateAuthError(e);
     renderAtleta();
@@ -1339,7 +1343,7 @@ async function resendVerificationEmail(){
       return;
     }
     await currentUser.sendEmailVerification();
-    showToast('Email di verifica inviata di nuovo.');
+    showToast('Email di verifica inviata di nuovo (controlla anche nello spam).');
   }catch(e){
     showToast('Errore: ' + (e.message || e));
   }
@@ -1381,10 +1385,20 @@ function translateAuthError(e){
     'auth/user-not-found': 'Nessun account con questa email.',
     'auth/invalid-credential': 'Email o password non corrette.',
     'auth/popup-closed-by-user': 'Accesso Google annullato.',
+    'auth/popup-blocked': 'Il browser ha bloccato la finestra di Google. Riprova, oppure registrati con email.',
+    'auth/cancelled-popup-request': 'Accesso Google interrotto, riprova.',
+    'auth/web-storage-unsupported': 'Questo browser non supporta l\'accesso con Google. Apri il link in Safari o Chrome, non dentro WhatsApp/Instagram, oppure registrati con email.',
+    'auth/operation-not-supported-in-this-environment': 'Questo browser non supporta l\'accesso con Google. Apri il link in Safari o Chrome, non dentro WhatsApp/Instagram, oppure registrati con email.',
+    'auth/network-request-failed': 'Connessione assente o instabile. Controlla la rete e riprova.',
     'auth/configuration-not-found': 'Il login non è ancora stato attivato dall\'amministratore.',
     'auth/unauthorized-domain': 'Questo indirizzo non è ancora autorizzato per il login Google.'
   };
   return map[code] || (e && e.message) || 'Si è verificato un errore, riprova.';
+}
+
+function isEmbeddedBrowser(){
+  const ua = (navigator.userAgent || '') + (navigator.vendor || '');
+  return /FBAN|FBAV|Instagram|Line\/|WhatsApp|MicroMessenger|TikTok/i.test(ua);
 }
 
 function showToast(msg){
@@ -1503,13 +1517,20 @@ async function saveAccountChanges(){
 }
 
 function renderAuthGate(){
+  const embeddedWarning = isEmbeddedBrowser()
+    ? `<div class="authbar authbar-warn">⚠️ Stai navigando dentro un'altra app (WhatsApp, Instagram...): l'accesso con Google potrebbe non funzionare qui. Se hai problemi, apri questo link in Safari o Chrome, oppure registrati con email.</div>`
+    : '';
+  return embeddedWarning + renderAuthGateInner();
+}
+
+function renderAuthGateInner(){
   const errHtml = authError ? `<div class="autherror">${escapeHtml(authError)}</div>` : '';
   const staffLink = `<div class="staffswitch">Sei un fisioterapista dello staff? <button class="linkbtn" onclick="switchTab('admin')">Accedi come staff</button></div>`;
 
   if(currentUser && currentUser.providerData[0] && currentUser.providerData[0].providerId === 'password' && !currentUser.emailVerified){
     return `<div class="authmodal">
       <h3>Verifica la tua email</h3>
-      <p class="authhint">Ti abbiamo inviato un link di verifica a <b>${escapeHtml(currentUser.email||'')}</b>. Aprilo, poi torna qui.</p>
+      <p class="authhint">Ti abbiamo inviato un link di verifica a <b>${escapeHtml(currentUser.email||'')}</b>. Aprilo, poi torna qui.<br>Non lo vedi? Controlla anche nello <b>spam</b> o posta indesiderata.</p>
       ${errHtml}
       <button class="btn-primary" style="width:100%" onclick="checkEmailVerified()">Ho verificato</button>
       <button class="btn-ghost" style="width:100%; margin-top:8px;" onclick="resendVerificationEmail()">Reinvia email</button>
