@@ -695,6 +695,8 @@ let editingMatchId = null;
 let partiteFilterTeam = 'tutte';
 let partiteFilterDay = 'tutti';
 let mapVisible = false;
+let slotFilterDay = 'tutti';
+let slotFilterPeriod = 'tutti';
 
 const ADMINS = [
   { user: 'Sambruni', pass: 'aslimerick', name: 'Sambruni' },
@@ -881,8 +883,32 @@ function renderAtleta(){
       <div>Nessuno slot è ancora stato pubblicato.<br>Torna a controllare più tardi.</div></div>`;
     return;
   }
-  const groups = groupByDay(slots);
-  let html = announcementHtml;
+
+  const days = [...new Set(slots.map(s=>s.date).filter(Boolean))].sort();
+  const filterHtml = `<div class="partitefilters">
+    <div class="filterrow">
+      <button class="filterpill ${slotFilterDay==='tutti'?'active':''}" onclick="setSlotFilterDay('tutti')">Tutti i giorni</button>
+      ${days.map(d=>`<button class="filterpill ${slotFilterDay===d?'active':''}" onclick="setSlotFilterDay('${d}')">${formatDayShort(d)}</button>`).join('')}
+    </div>
+    <div class="filterrow">
+      <button class="filterpill ${slotFilterPeriod==='tutti'?'active':''}" onclick="setSlotFilterPeriod('tutti')">Tutto il giorno</button>
+      <button class="filterpill ${slotFilterPeriod==='mattina'?'active':''}" onclick="setSlotFilterPeriod('mattina')">Mattina (7-13)</button>
+      <button class="filterpill ${slotFilterPeriod==='pomeriggio'?'active':''}" onclick="setSlotFilterPeriod('pomeriggio')">Pomeriggio (13-18)</button>
+      <button class="filterpill ${slotFilterPeriod==='sera'?'active':''}" onclick="setSlotFilterPeriod('sera')">Sera (18-22)</button>
+    </div>
+  </div>`;
+
+  let filtered = slots;
+  if(slotFilterDay !== 'tutti') filtered = filtered.filter(s=>s.date===slotFilterDay);
+  if(slotFilterPeriod !== 'tutti') filtered = filtered.filter(s=>getPeriod(s.time)===slotFilterPeriod);
+
+  if(filtered.length === 0){
+    main.innerHTML = announcementHtml + filterHtml + `<div class="empty"><div class="icon">🕒</div><div>Nessuno slot corrisponde ai filtri scelti.</div></div>`;
+    return;
+  }
+
+  const groups = groupByDay(filtered);
+  let html = announcementHtml + filterHtml;
   groups.forEach(g=>{
     const freeCount = g.items.filter(s=>!s.name).length;
     html += `<div class="daygroup">
@@ -907,6 +933,22 @@ function renderAtleta(){
   });
   main.innerHTML = html;
   initAutoGrow();
+}
+
+function setSlotFilterDay(v){
+  slotFilterDay = v;
+  renderAtleta();
+}
+function setSlotFilterPeriod(v){
+  slotFilterPeriod = v;
+  renderAtleta();
+}
+function getPeriod(time){
+  if(!time) return null;
+  if(time >= '07:00' && time < '13:00') return 'mattina';
+  if(time >= '13:00' && time < '18:00') return 'pomeriggio';
+  if(time >= '18:00' && time <= '22:00') return 'sera';
+  return null;
 }
 
 function renderSlotCard(s, paired){
@@ -1374,7 +1416,7 @@ function buildGestioneHtml(){
       <h3>Aggiungi uno slot</h3>
       <div class="addgrid">
         <div><label>Data</label><input type="date" id="new-date"></div>
-        <div><label>Orario</label><input type="time" id="new-time"></div>
+        <div><label>Orario</label><input type="time" id="new-time" min="07:00" max="22:00"></div>
         <div><label>Durata (minuti)</label><input type="number" id="new-dur" value="30" min="5" step="5"></div>
         <div><label>Fisioterapista</label><select id="new-physio">${physioOptions(currentAdminName)}</select></div>
       </div>
@@ -1386,8 +1428,8 @@ function buildGestioneHtml(){
       <p style="margin:-6px 0 12px; font-size:12.5px; color:var(--taken);">Crea automaticamente uno slot ogni X minuti, dall'ora di inizio all'ora di fine.</p>
       <div class="addgrid">
         <div class="full"><label>Data</label><input type="date" id="bulk-date"></div>
-        <div><label>Dalle ore</label><input type="time" id="bulk-start"></div>
-        <div><label>Alle ore</label><input type="time" id="bulk-end"></div>
+        <div><label>Dalle ore</label><input type="time" id="bulk-start" min="07:00" max="22:00"></div>
+        <div><label>Alle ore</label><input type="time" id="bulk-end" min="07:00" max="22:00"></div>
         <div><label>Uno ogni (min)</label><input type="number" id="bulk-every" value="30" min="5" step="5"></div>
         <div><label>Durata slot (min)</label><input type="number" id="bulk-dur" value="30" min="5" step="5"></div>
         <div class="full"><label>Fisioterapista</label><select id="bulk-physio">${physioOptions(currentAdminName)}</select></div>
@@ -1412,7 +1454,7 @@ function buildGestioneHtml(){
             ${editing ? `
             <div class="addgrid" style="margin-top:2px;">
               <div><label>Data</label><input type="date" id="edit-date-${s.id}" value="${s.date}"></div>
-              <div><label>Orario</label><input type="time" id="edit-time-${s.id}" value="${s.time}"></div>
+              <div><label>Orario</label><input type="time" id="edit-time-${s.id}" value="${s.time}" min="07:00" max="22:00"></div>
               <div><label>Durata (min)</label><input type="number" id="edit-dur-${s.id}" value="${s.duration}" min="5" step="5"></div>
               <div><label>Fisioterapista</label><select id="edit-physio-${s.id}">${physioOptions(s.physio)}</select></div>
               <div class="full"><label>Nome (vuoto = libero)</label><input type="text" id="edit-name-${s.id}" value="${s.name ? escapeHtml(s.name) : ''}" maxlength="60"></div>
@@ -1543,6 +1585,10 @@ async function addSlot(){
     showToast('Compila data, orario e durata.');
     return;
   }
+  if(!isWithinAllowedHours(time)){
+    showToast('Orario non consentito: gli slot si possono inserire solo tra le 7:00 e le 22:00.');
+    return;
+  }
   busy = true;
   try{
     slots = await fetchSlots();
@@ -1559,6 +1605,11 @@ async function addSlot(){
 }
 
 function timeToMin(t){ const [h,m] = t.split(':').map(Number); return h*60+m; }
+function isWithinAllowedHours(time){
+  if(!time) return false;
+  const m = timeToMin(time);
+  return m >= 7*60 && m <= 22*60;
+}
 
 async function generateSlots(){
   const date = document.getElementById('bulk-date').value;
@@ -1576,6 +1627,10 @@ async function generateSlots(){
   const endMin = timeToMin(end);
   if(endMin < startMin){
     showToast('L\'ora di fine deve essere uguale o dopo l\'ora di inizio.');
+    return;
+  }
+  if(!isWithinAllowedHours(start) || !isWithinAllowedHours(end)){
+    showToast('Orario non consentito: gli slot si possono generare solo tra le 7:00 e le 22:00.');
     return;
   }
 
@@ -1651,6 +1706,10 @@ async function saveAdminEdit(id){
   const done = document.getElementById('edit-done-'+id).checked;
   if(!date || !time || !dur || dur<=0){
     showToast('Compila data, orario e durata.');
+    return;
+  }
+  if(!isWithinAllowedHours(time)){
+    showToast('Orario non consentito: gli slot devono essere tra le 7:00 e le 22:00.');
     return;
   }
   busy = true;
