@@ -328,6 +328,26 @@
     border:1px solid var(--line);
     margin-top:8px;
   }
+  .mapwrap{position:relative;}
+  .fieldmarker{
+    position:absolute;
+    width:30px;
+    height:30px;
+    margin-left:-15px;
+    margin-top:-23px;
+    border-radius:50%;
+    background:rgba(232,166,59,.35);
+    border:3px solid var(--amber);
+    box-shadow:0 0 0 4px rgba(232,166,59,.25);
+    animation:markerpulse 1.4s ease-in-out infinite;
+    pointer-events:none;
+  }
+  @keyframes markerpulse{
+    0%,100%{ transform:scale(1); opacity:1; }
+    50%{ transform:scale(1.3); opacity:.65; }
+  }
+  .mfield{cursor:pointer;}
+  .mfield:active{opacity:.7;}
   .partitefilters{margin-bottom:6px;}
   .filterrow{
     display:flex;
@@ -753,6 +773,15 @@ let editingScoreId = null;
 let partiteFilterTeam = 'tutte';
 let partiteFilterDay = 'tutti';
 let mapVisible = false;
+let highlightedField = null;
+const FIELD_COORDS = {
+  "1": [498,568], "2": [593,562], "3": [605,587], "4": [580,623], "5": [623,618],
+  "6": [643,598], "7": [627,665], "8": [650,658], "9": [672,650], "10": [592,675],
+  "11": [530,637], "12": [512,645], "13": [492,648], "14": [468,648], "15": [487,677],
+  "16": [533,670], "17": [533,688], "18": [353,670], "19": [615,418], "20": [273,268],
+  "21": [248,268], "22": [301,201], "23": [329,201], "24": [221,205], "25": [221,163]
+};
+const MAP_IMG_W = 863, MAP_IMG_H = 871;
 let slotFilterDay = 'tutti';
 let slotFilterPeriod = 'tutti';
 
@@ -1058,9 +1087,10 @@ function renderPartite(){
     main.innerHTML = '<div class="spin">Carico il programma partite…</div>';
     return;
   }
+  const markerHtml = (highlightedField && FIELD_COORDS[highlightedField]) ? `<div class="fieldmarker" style="left:${(FIELD_COORDS[highlightedField][0]/MAP_IMG_W*100).toFixed(2)}%; top:${(FIELD_COORDS[highlightedField][1]/MAP_IMG_H*100).toFixed(2)}%;"></div>` : '';
   const mapHtml = `<div class="mapblock">
     <button class="btn-ghost" style="width:100%" onclick="toggleMap()">${mapVisible ? 'Nascondi mappa campi' : '🗺️ Mostra mappa campi'}</button>
-    ${mapVisible ? `<img class="campmap" src="${MAP_CAMPI}" alt="Mappa campi UL Campus">` : ''}
+    ${mapVisible ? `<div class="mapwrap"><img class="campmap" src="${MAP_CAMPI}" alt="Mappa campi UL Campus">${markerHtml}</div>` : ''}
   </div>`;
   if(matches.length === 0){
     main.innerHTML = mapHtml + `<div class="empty"><div class="icon">🥏</div>
@@ -1113,9 +1143,9 @@ function renderPartite(){
           <div class="mvs">vs ${escapeHtml(m.opponent || '?')}</div>
           ${matchScoreHtml(m)}
         </div>
-        <div class="mfield">
+        <div class="mfield" onclick="showFieldOnMap('${escapeJs(m.field||'')}')">
           <div class="fieldnum">${escapeHtml(m.field || '?')}</div>
-          <div class="fieldlabel">Campo</div>
+          <div class="fieldlabel">📍 Campo</div>
         </div>
       </div>`;
     });
@@ -1125,7 +1155,16 @@ function renderPartite(){
 
 function toggleMap(){
   mapVisible = !mapVisible;
+  if(!mapVisible) highlightedField = null;
   renderPartite();
+}
+
+function showFieldOnMap(field){
+  highlightedField = field || null;
+  mapVisible = true;
+  renderPartite();
+  const el = document.querySelector('.mapblock');
+  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 function setPartiteFilterTeam(v){
