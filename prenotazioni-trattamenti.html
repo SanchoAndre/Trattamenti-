@@ -219,6 +219,12 @@
     color:var(--taken);
     word-break:break-word;
   }
+  .bookingasname{
+    font-size:13.5px;
+    color:var(--taken);
+    word-break:break-word;
+    margin-bottom:2px;
+  }
   .bookedname b{color:var(--ink);}
   .bookform{
     margin-top:9px;
@@ -235,7 +241,7 @@
     word-break:break-word;
   }
   .notetext b{font-style:normal; color:var(--ink);}
-  input[type=text], input[type=date], input[type=time], input[type=number], input[type=password]{
+  input[type=text], input[type=date], input[type=time], input[type=number], input[type=password], input[type=email]{
     font-family:'Inter',sans-serif;
     font-size:14px;
     padding:9px 11px;
@@ -511,6 +517,108 @@
   }
   .loginbox h3{margin:0 0 4px; font-size:17px;}
   .loginbox p{margin:0 0 16px; font-size:13.5px; color:var(--taken);}
+  .authbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:11px 14px;
+    margin-bottom:10px;
+    font-size:13.5px;
+  }
+  .authbar-warn{background:#fff7e8; border-color:var(--amber);}
+  .authbar-actions{display:flex; gap:6px; flex-wrap:wrap;}
+  .authbar button{font-size:12.5px; padding:7px 11px;}
+  .avatarimg{
+    width:30px; height:30px;
+    border-radius:50%;
+    object-fit:cover;
+    flex:none;
+    border:1px solid var(--line);
+  }
+  .avatarplaceholder{
+    display:flex; align-items:center; justify-content:center;
+    background:var(--sage-bg);
+    font-size:15px;
+  }
+  .avatarbig{width:74px; height:74px; margin-bottom:8px;}
+  .authoverlay{
+    position:fixed;
+    inset:0;
+    background:rgba(20,30,25,.45);
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    z-index:50;
+    padding-top:40px;
+  }
+  .authmodal{
+    background:#fff;
+    width:100%;
+    max-width:480px;
+    border-radius:20px 20px 0 0;
+    padding:20px 18px 26px;
+    max-height:88vh;
+    overflow-y:auto;
+  }
+  .authmodal h3{margin:0 0 2px; font-size:17px;}
+  .authhint{margin:0 0 14px; font-size:13px; color:var(--taken);}
+  .authmodal label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--taken);
+    margin:12px 0 5px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+  .authtabs{display:flex; gap:8px; margin-bottom:14px;}
+  .authtab{
+    flex:1;
+    background:var(--sage-bg);
+    border:none;
+    border-radius:9px;
+    padding:9px;
+    font-weight:700;
+    font-size:13.5px;
+    color:var(--taken);
+    cursor:pointer;
+  }
+  .authtab.active{background:var(--pitch); color:#fff;}
+  .authdivider{
+    text-align:center;
+    font-size:11.5px;
+    color:var(--taken);
+    margin:12px 0;
+    position:relative;
+  }
+  .autherror{
+    background:#fdeceb;
+    color:var(--danger);
+    border-radius:9px;
+    padding:9px 11px;
+    font-size:13px;
+    margin-bottom:10px;
+  }
+  .genderrow{display:flex; gap:8px;}
+  .genderpill{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    background:var(--sage-bg);
+    border-radius:9px;
+    padding:9px;
+    font-size:13.5px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .photopicker{display:flex; flex-direction:column; align-items:center; margin-bottom:6px;}
+  .photobtn{display:inline-block; font-size:12.5px;}
   .field{margin-bottom:12px;}
   .field label{
     display:block;
@@ -741,12 +849,24 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 // ======================================================================
 // CONFIGURAZIONE: incolla qui l'URL del tuo Firebase Realtime Database
 // (es. https://trattamenti-xxxx-default-rtdb.europe-west1.firebasedatabase.app)
 // ======================================================================
 const FIREBASE_URL = 'https://trattamenti-9d1a0-default-rtdb.europe-west1.firebasedatabase.app';
+// ======================================================================
+// CONFIGURAZIONE AUTENTICAZIONE: incolla qui il blocco firebaseConfig
+// preso da Project settings > Your apps > Web app su Firebase Console
+// ======================================================================
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBDsYDUSAcaD1Z-wXYCsmgWTgr6LCePLUM',
+  authDomain: 'trattamenti-9d1a0.firebaseapp.com',
+  projectId: 'trattamenti-9d1a0'
+};
+const USERS_PATH = 'prenotazioni-trattamenti/users';
 const DATA_PATH = 'prenotazioni-trattamenti/slots';
 const MESSAGE_PATH = 'prenotazioni-trattamenti/message';
 const MATCHES_PATH = 'prenotazioni-trattamenti/matches';
@@ -784,6 +904,14 @@ const FIELD_COORDS = {
 const MAP_IMG_W = 863, MAP_IMG_H = 871;
 let slotFilterDay = 'tutti';
 let slotFilterPeriod = 'tutti';
+
+// ---------- autenticazione atleti ----------
+let authInitialized = false;
+let currentUser = null;      // oggetto utente Firebase Auth, o null
+let userProfile = null;      // { username, gender, team, photo } da RTDB, o null
+let authView = null;         // null | 'login' | 'register' | 'completeProfile'
+let authError = '';
+let pendingPhotoData = null; // foto profilo ridimensionata, in attesa di salvataggio
 
 const ADMINS = [
   { user: 'Sambruni', pass: 'aslimerick', name: 'Sambruni' },
@@ -904,6 +1032,249 @@ async function persistMatches(newMatches, attempt){
   }
 }
 
+// ---------- profilo utente (Firebase Realtime Database) ----------
+async function fetchUserProfile(uid){
+  if(!isConfigured()) return null;
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${USERS_PATH}/${uid}.json`);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  }catch(e){
+    return null;
+  }
+}
+async function saveUserProfile(uid, profile){
+  if(!isConfigured()) return false;
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${USERS_PATH}/${uid}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile)
+    });
+    return res.ok;
+  }catch(e){
+    return false;
+  }
+}
+
+// ---------- autenticazione ----------
+function initAuth(){
+  if(authInitialized) return;
+  authInitialized = true;
+  try{
+    if(!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.indexOf('INCOLLA') === 0) return;
+    firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.auth().onAuthStateChanged(async (user)=>{
+      currentUser = user;
+      if(user){
+        userProfile = await fetchUserProfile(user.uid);
+        if(!userProfile || !userProfile.username){
+          authView = 'completeProfile';
+        } else {
+          authView = null;
+        }
+      } else {
+        userProfile = null;
+      }
+      if(currentTab === 'atleta') renderAtleta();
+    });
+  }catch(e){
+    console.error('Errore inizializzazione autenticazione', e);
+  }
+}
+
+function isAuthReady(){
+  return typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('INCOLLA') !== 0;
+}
+
+function openAuth(view){
+  authError = '';
+  pendingPhotoData = null;
+  authView = view;
+  renderAtleta();
+}
+function closeAuth(){
+  authError = '';
+  authView = (currentUser && (!userProfile || !userProfile.username)) ? 'completeProfile' : null;
+  renderAtleta();
+}
+
+async function handleProfilePhoto(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  try{
+    const dataUrl = await new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=>resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const img = await new Promise((resolve, reject)=>{
+      const im = new Image();
+      im.onload = ()=>resolve(im);
+      im.onerror = reject;
+      im.src = dataUrl;
+    });
+    const size = 160;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const side = Math.min(img.width, img.height);
+    ctx.drawImage(img, (img.width-side)/2, (img.height-side)/2, side, side, 0, 0, size, size);
+    pendingPhotoData = canvas.toDataURL('image/jpeg', 0.8);
+    const preview = document.getElementById('photo-preview');
+    if(preview) preview.src = pendingPhotoData;
+  }catch(e){
+    showToast('Impossibile caricare questa immagine.');
+  }
+}
+
+async function doRegisterEmail(){
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const username = document.getElementById('reg-username').value.trim();
+  const gender = document.querySelector('input[name="reg-gender"]:checked');
+  const team = document.getElementById('reg-team').value;
+  authError = '';
+  if(!email || !password || !username){
+    authError = 'Compila email, password e nome utente.';
+    renderAtleta();
+    return;
+  }
+  if(password.length < 6){
+    authError = 'La password deve avere almeno 6 caratteri.';
+    renderAtleta();
+    return;
+  }
+  try{
+    const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+    await cred.user.sendEmailVerification();
+    const ok = await saveUserProfile(cred.user.uid, {
+      username, gender: gender ? gender.value : null, team, photo: pendingPhotoData || null, email
+    });
+    userProfile = { username, gender: gender ? gender.value : null, team, photo: pendingPhotoData || null, email };
+    if(!ok) showToast('Account creato, ma il profilo non si è salvato: riprova a completarlo.');
+    else showToast('Account creato! Controlla la tua email per il link di verifica.');
+    authView = null;
+    renderAtleta();
+  }catch(e){
+    authError = translateAuthError(e);
+    renderAtleta();
+  }
+}
+
+async function doLoginEmail(){
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  authError = '';
+  if(!email || !password){
+    authError = 'Inserisci email e password.';
+    renderAtleta();
+    return;
+  }
+  try{
+    await firebase.auth().signInWithEmailAndPassword(email, password);
+    authView = null;
+    renderAtleta();
+  }catch(e){
+    authError = translateAuthError(e);
+    renderAtleta();
+  }
+}
+
+async function doGoogleSignIn(){
+  authError = '';
+  try{
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await firebase.auth().signInWithPopup(provider);
+  }catch(e){
+    authError = translateAuthError(e);
+    renderAtleta();
+  }
+}
+
+async function saveCompleteProfile(){
+  const username = document.getElementById('cp-username').value.trim();
+  const gender = document.querySelector('input[name="cp-gender"]:checked');
+  const team = document.getElementById('cp-team').value;
+  authError = '';
+  if(!username){
+    authError = 'Inserisci un nome utente.';
+    renderAtleta();
+    return;
+  }
+  const profile = {
+    username, gender: gender ? gender.value : null, team,
+    photo: pendingPhotoData || (userProfile && userProfile.photo) || null,
+    email: currentUser.email || null
+  };
+  const ok = await saveUserProfile(currentUser.uid, profile);
+  if(ok){
+    userProfile = profile;
+    authView = null;
+    showToast('Profilo salvato ✓');
+    renderAtleta();
+  } else {
+    authError = 'Errore nel salvataggio del profilo, riprova.';
+    renderAtleta();
+  }
+}
+
+async function resendVerificationEmail(){
+  try{
+    await currentUser.reload();
+    if(currentUser.emailVerified){
+      showToast('La tua email risulta già verificata ✓');
+      renderAtleta();
+      return;
+    }
+    await currentUser.sendEmailVerification();
+    showToast('Email di verifica inviata di nuovo.');
+  }catch(e){
+    showToast('Errore: ' + (e.message || e));
+  }
+}
+
+async function checkEmailVerified(){
+  try{
+    await currentUser.reload();
+    if(currentUser.emailVerified){
+      showToast('Email verificata ✓');
+      renderAtleta();
+    } else {
+      showToast('Non ancora verificata: controlla la tua casella di posta.');
+    }
+  }catch(e){
+    showToast('Errore: ' + (e.message || e));
+  }
+}
+
+async function doAthleteLogout(){
+  try{
+    await firebase.auth().signOut();
+  }catch(e){}
+  currentUser = null;
+  userProfile = null;
+  authView = null;
+  renderAtleta();
+}
+
+function translateAuthError(e){
+  const code = e && e.code;
+  const map = {
+    'auth/email-already-in-use': 'Questa email è già registrata. Prova ad accedere.',
+    'auth/invalid-email': 'Indirizzo email non valido.',
+    'auth/weak-password': 'Password troppo debole (minimo 6 caratteri).',
+    'auth/wrong-password': 'Password errata.',
+    'auth/user-not-found': 'Nessun account con questa email.',
+    'auth/invalid-credential': 'Email o password non corrette.',
+    'auth/popup-closed-by-user': 'Accesso Google annullato.',
+    'auth/configuration-not-found': 'Il login non è ancora stato attivato dall\'amministratore.',
+    'auth/unauthorized-domain': 'Questo indirizzo non è ancora autorizzato per il login Google.'
+  };
+  return map[code] || (e && e.message) || 'Si è verificato un errore, riprova.';
+}
+
 function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -954,19 +1325,142 @@ function configBanner(){
   </div>`;
 }
 
+function renderAuthBar(){
+  if(!isAuthReady()){
+    return `<div class="authbar authbar-warn">⚙️ Login non ancora attivato dall'amministratore.</div>`;
+  }
+  if(!currentUser){
+    return `<div class="authbar">
+      <span>👤 Non hai effettuato l'accesso</span>
+      <button class="btn-amber" onclick="openAuth('login')">Accedi o registrati</button>
+    </div>`;
+  }
+  if(!currentUser.emailVerified && currentUser.providerData[0] && currentUser.providerData[0].providerId === 'password'){
+    return `<div class="authbar authbar-warn">
+      <span>⚠️ Verifica la tua email per poter prenotare</span>
+      <div class="authbar-actions">
+        <button class="btn-ghost" onclick="checkEmailVerified()">Ho verificato</button>
+        <button class="btn-ghost" onclick="resendVerificationEmail()">Reinvia email</button>
+        <button class="btn-ghost" onclick="doAthleteLogout()">Esci</button>
+      </div>
+    </div>`;
+  }
+  const photo = userProfile && userProfile.photo;
+  const name = (userProfile && userProfile.username) || currentUser.email;
+  return `<div class="authbar">
+    ${photo ? `<img class="avatarimg" src="${photo}" alt="">` : '<span class="avatarimg avatarplaceholder">👤</span>'}
+    <span>Ciao, <b>${escapeHtml(name)}</b></span>
+    <button class="btn-ghost" onclick="doAthleteLogout()">Esci</button>
+  </div>`;
+}
+
+function renderAuthPanel(){
+  if(!authView || !isAuthReady()) return '';
+  const errHtml = authError ? `<div class="autherror">${escapeHtml(authError)}</div>` : '';
+
+  if(authView === 'completeProfile' && currentUser){
+    const photo = pendingPhotoData || (userProfile && userProfile.photo) || '';
+    return `<div class="authoverlay">
+      <div class="authmodal">
+        <h3>Completa il tuo profilo</h3>
+        <p class="authhint">Un'ultima cosa prima di poter prenotare.</p>
+        ${errHtml}
+        <div class="photopicker">
+          <img id="photo-preview" class="avatarimg avatarbig" src="${photo}" alt="" style="${photo?'':'display:none;'}">
+          <label class="btn-ghost photobtn">📷 Scegli foto profilo
+            <input type="file" accept="image/*" style="display:none" onchange="handleProfilePhoto(this)">
+          </label>
+        </div>
+        <label>Nome utente</label>
+        <input type="text" id="cp-username" value="${escapeHtml((userProfile&&userProfile.username)||'')}" maxlength="40" placeholder="Nome e cognome">
+        <label>Genere</label>
+        <div class="genderrow">
+          <label class="genderpill"><input type="radio" name="cp-gender" value="M" ${userProfile&&userProfile.gender==='M'?'checked':''}> M</label>
+          <label class="genderpill"><input type="radio" name="cp-gender" value="F" ${userProfile&&userProfile.gender==='F'?'checked':''}> F</label>
+        </div>
+        <label>Squadra</label>
+        <select id="cp-team">
+          <option value="Tequila Boom Boom" ${userProfile&&userProfile.team==='Tequila Boom Boom'?'selected':''}>Tequila Boom Boom</option>
+          <option value="Cotarica Grandes" ${userProfile&&userProfile.team==='Cotarica Grandes'?'selected':''}>Cotarica Grandes</option>
+        </select>
+        <button class="btn-primary" style="width:100%; margin-top:12px;" onclick="saveCompleteProfile()">Salva profilo</button>
+      </div>
+    </div>`;
+  }
+
+  if(authView === 'register'){
+    const photo = pendingPhotoData || '';
+    return `<div class="authoverlay">
+      <div class="authmodal">
+        <div class="authtabs">
+          <button class="authtab" onclick="openAuth('login')">Accedi</button>
+          <button class="authtab active">Registrati</button>
+        </div>
+        ${errHtml}
+        <button class="btn-ghost" style="width:100%" onclick="doGoogleSignIn()">🔵 Registrati con Google</button>
+        <div class="authdivider">oppure con email</div>
+        <div class="photopicker">
+          <img id="photo-preview" class="avatarimg avatarbig" src="${photo}" alt="" style="${photo?'':'display:none;'}">
+          <label class="btn-ghost photobtn">📷 Scegli foto profilo
+            <input type="file" accept="image/*" style="display:none" onchange="handleProfilePhoto(this)">
+          </label>
+        </div>
+        <label>Nome utente</label>
+        <input type="text" id="reg-username" maxlength="40" placeholder="Nome e cognome">
+        <label>Genere</label>
+        <div class="genderrow">
+          <label class="genderpill"><input type="radio" name="reg-gender" value="M"> M</label>
+          <label class="genderpill"><input type="radio" name="reg-gender" value="F"> F</label>
+        </div>
+        <label>Squadra</label>
+        <select id="reg-team">
+          <option value="Tequila Boom Boom">Tequila Boom Boom</option>
+          <option value="Cotarica Grandes">Cotarica Grandes</option>
+        </select>
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="tuaemail@esempio.com">
+        <label>Password</label>
+        <input type="password" id="reg-password" placeholder="Almeno 6 caratteri">
+        <button class="btn-primary" style="width:100%; margin-top:12px;" onclick="doRegisterEmail()">Crea account</button>
+        <button class="btn-ghost" style="width:100%; margin-top:6px;" onclick="closeAuth()">Annulla</button>
+      </div>
+    </div>`;
+  }
+
+  // login
+  return `<div class="authoverlay">
+    <div class="authmodal">
+      <div class="authtabs">
+        <button class="authtab active">Accedi</button>
+        <button class="authtab" onclick="openAuth('register')">Registrati</button>
+      </div>
+      ${errHtml}
+      <button class="btn-ghost" style="width:100%" onclick="doGoogleSignIn()">🔵 Accedi con Google</button>
+      <div class="authdivider">oppure con email</div>
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="tuaemail@esempio.com">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="La tua password">
+      <button class="btn-primary" style="width:100%; margin-top:12px;" onclick="doLoginEmail()">Accedi</button>
+      <button class="btn-ghost" style="width:100%; margin-top:6px;" onclick="closeAuth()">Annulla</button>
+    </div>
+  </div>`;
+}
+
 function renderAtleta(){
   const main = document.getElementById('main');
   if(!isConfigured()){
     main.innerHTML = configBanner();
     return;
   }
+  const authHtml = renderAuthBar() + renderAuthPanel();
   if(!loaded){
-    main.innerHTML = '<div class="spin">Carico gli orari disponibili…</div>';
+    main.innerHTML = authHtml + '<div class="spin">Carico gli orari disponibili…</div>';
     return;
   }
   const announcementHtml = announcement ? `<div class="announcement">📣 ${escapeHtml(announcement).replace(/\n/g, '<br>')}</div>` : '';
   if(slots.length === 0){
-    main.innerHTML = announcementHtml + `<div class="empty"><div class="icon">🕒</div>
+    main.innerHTML = authHtml + announcementHtml + `<div class="empty"><div class="icon">🕒</div>
       <div>Nessuno slot è ancora stato pubblicato.<br>Torna a controllare più tardi.</div></div>`;
     return;
   }
@@ -990,12 +1484,12 @@ function renderAtleta(){
   if(slotFilterPeriod !== 'tutti') filtered = filtered.filter(s=>getPeriod(s.time)===slotFilterPeriod);
 
   if(filtered.length === 0){
-    main.innerHTML = announcementHtml + filterHtml + `<div class="empty"><div class="icon">🕒</div><div>Nessuno slot corrisponde ai filtri scelti.</div></div>`;
+    main.innerHTML = authHtml + announcementHtml + filterHtml + `<div class="empty"><div class="icon">🕒</div><div>Nessuno slot corrisponde ai filtri scelti.</div></div>`;
     return;
   }
 
   const groups = groupByDay(filtered);
-  let html = announcementHtml + filterHtml;
+  let html = authHtml + announcementHtml + filterHtml;
   groups.forEach(g=>{
     const freeCount = g.items.filter(s=>!s.name).length;
     html += `<div class="daygroup">
@@ -1043,24 +1537,31 @@ function renderSlotCard(s, paired){
   const free = !s.name;
   const editing = editingAthleteId === s.id;
   const booking = bookingOpenId === s.id;
+  const readyToBook = currentUser && userProfile && userProfile.username &&
+    (currentUser.emailVerified || !currentUser.providerData[0] || currentUser.providerData[0].providerId !== 'password');
+  const isOwner = !!(currentUser && s.bookedByUid && s.bookedByUid === currentUser.uid);
   return `<div class="slotcard ${paired?'paired':''}">
     <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
     <div class="slotinfo">
       <span class="slottime">${s.time}–${end}</span>
       <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
       ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
-      ${free ? (booking ? `
+      ${free ? (
+        !readyToBook ? `
+      <button class="btn-amber" style="width:100%; margin-top:9px;" onclick="openAuth('login')">🔒 Accedi per prenotare</button>` :
+        booking ? `
       <div class="bookform">
-        <input type="text" id="name-${s.id}" placeholder="Nome e cognome" maxlength="60">
+        <div class="bookingasname">Prenoti come: <b>${escapeHtml(userProfile.username)}</b></div>
         <textarea class="autonote" id="note-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" rows="1" oninput="autoGrow(this)"></textarea>
         <button class="btn-primary" onclick="bookSlot('${s.id}')">Conferma prenotazione</button>
       </div>
       <div class="rowactions">
         <button class="btn-ghost" onclick="toggleBookForm(null)">Annulla</button>
       </div>` : `
-      <button class="btn-primary" style="width:100%; margin-top:9px;" onclick="toggleBookForm('${s.id}')">Prenota</button>`) : editing ? `
+      <button class="btn-primary" style="width:100%; margin-top:9px;" onclick="toggleBookForm('${s.id}')">Prenota</button>`
+      ) : (editing && isOwner) ? `
       <div class="bookform">
-        <input type="text" id="editname-${s.id}" placeholder="Nome e cognome" maxlength="60" value="${escapeHtml(s.name)}">
+        <div class="bookingasname">Prenotato da: <b>${escapeHtml(s.name)}</b></div>
         <textarea class="autonote" id="editnote-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" rows="1" oninput="autoGrow(this)">${escapeHtml(s.note || '')}</textarea>
         <button class="btn-primary" onclick="saveNameEdit('${s.id}')">Salva</button>
       </div>
@@ -1069,10 +1570,11 @@ function renderSlotCard(s, paired){
       </div>` : `
       <div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>
       ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
+      ${isOwner ? `
       <div class="rowactions">
-        <button class="btn-ghost" onclick="toggleEditAthlete('${s.id}')">Cambia nome</button>
+        <button class="btn-ghost" onclick="toggleEditAthlete('${s.id}')">Modifica nota</button>
         <button class="btn-danger" onclick="cancelBooking('${s.id}')">Annulla</button>
-      </div>`}
+      </div>` : ''}`}
     </div>
   </div>`;
 }
@@ -1201,15 +1703,19 @@ function initAutoGrow(){
 }
 
 async function bookSlot(id){
-  const input = document.getElementById('name-'+id);
-  const name = (input.value || '').trim();
-  if(!name){
-    input.focus();
+  if(!currentUser){ openAuth('login'); return; }
+  if(currentUser.providerData[0] && currentUser.providerData[0].providerId === 'password' && !currentUser.emailVerified){
+    showToast('Verifica prima la tua email per poter prenotare.');
     return;
   }
+  if(!userProfile || !userProfile.username){
+    authView = 'completeProfile';
+    renderAtleta();
+    return;
+  }
+  const name = userProfile.username;
   const noteInput = document.getElementById('note-'+id);
   const note = noteInput ? (noteInput.value || '').trim() : '';
-  input.disabled = true;
   busy = true;
   try{
     slots = await fetchSlots();
@@ -1219,9 +1725,10 @@ async function bookSlot(id){
     slot.name = name;
     slot.note = note || null;
     slot.bookedAt = Date.now();
+    slot.bookedByUid = currentUser.uid;
     const ok = await persistSlots(slots);
     if(ok){ showToast('Prenotazione confermata ✓'); bookingOpenId = null; }
-    else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.name = null; slot.note = null; }
+    else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.name = null; slot.note = null; slot.bookedByUid = null; }
     renderAtleta();
   } catch(e){
     showToast('Errore: ' + e.message);
@@ -1232,15 +1739,23 @@ async function bookSlot(id){
 }
 
 async function cancelBooking(id){
-  if(!confirm('Annullare questa prenotazione?')) return;
   busy = true;
   try{
     slots = await fetchSlots();
     const slot = slots.find(s=>s.id===id);
-    if(!slot) return;
+    if(!slot) { busy = false; return; }
+    if(!isAdmin){
+      if(!currentUser || !slot.bookedByUid || slot.bookedByUid !== currentUser.uid){
+        showToast('Puoi annullare solo le tue prenotazioni.');
+        busy = false;
+        return;
+      }
+    }
+    if(!confirm('Annullare questa prenotazione?')){ busy = false; return; }
     slot.name = null;
     slot.note = null;
     slot.bookedAt = null;
+    slot.bookedByUid = null;
     slot.done = false;
     const ok = await persistSlots(slots);
     if(ok) showToast('Prenotazione annullata');
@@ -1283,12 +1798,7 @@ function toggleBookForm(id){
 }
 
 async function saveNameEdit(id){
-  const input = document.getElementById('editname-'+id);
-  const name = (input.value || '').trim();
-  if(!name){
-    input.focus();
-    return;
-  }
+  if(!currentUser){ showToast('Devi accedere per modificare una prenotazione.'); return; }
   const noteInput = document.getElementById('editnote-'+id);
   const note = noteInput ? (noteInput.value || '').trim() : '';
   busy = true;
@@ -1296,10 +1806,15 @@ async function saveNameEdit(id){
     slots = await fetchSlots();
     const slot = slots.find(s=>s.id===id);
     if(!slot){ showToast('Questo slot non esiste più.'); editingAthleteId = null; renderAtleta(); return; }
-    slot.name = name;
+    if(!slot.bookedByUid || slot.bookedByUid !== currentUser.uid){
+      showToast('Puoi modificare solo le tue prenotazioni.');
+      editingAthleteId = null;
+      renderAtleta();
+      return;
+    }
     slot.note = note || null;
     const ok = await persistSlots(slots);
-    if(ok) showToast('Prenotazione aggiornata ✓');
+    if(ok) showToast('Nota aggiornata ✓');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
     editingAthleteId = null;
     renderAtleta();
@@ -2006,6 +2521,7 @@ async function refresh(){
 }
 
 (async function init(){
+  initAuth();
   renderAtleta();
   await refresh();
   pollTimer = setInterval(async ()=>{
