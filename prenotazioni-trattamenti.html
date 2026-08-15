@@ -966,6 +966,28 @@ function getAdminAuthInstance(){
     return null;
   }
 }
+let adminAuthInitialized = false;
+function initAdminAuth(){
+  if(adminAuthInitialized) return;
+  adminAuthInitialized = true;
+  const auth = getAdminAuthInstance();
+  if(!auth) return;
+  auth.onAuthStateChanged((user)=>{
+    if(user){
+      const match = ADMINS.find(a => a.authEmail === user.email);
+      if(match){
+        isAdmin = true;
+        currentAdminName = match.name;
+      }
+    } else {
+      isAdmin = false;
+      currentAdminName = '';
+    }
+    if(loaded) refresh();
+    else if(currentTab === 'admin') renderAdmin();
+    else if(currentTab === 'atleta') renderAtleta();
+  });
+}
 async function ensureAdminAuthSession(match){
   const auth = getAdminAuthInstance();
   if(!auth || !match) return null;
@@ -1166,7 +1188,8 @@ function initAuth(){
       } else {
         userProfile = null;
       }
-      if(currentTab === 'atleta') renderAtleta();
+      if(loaded) refresh();
+      else if(currentTab === 'atleta') renderAtleta();
     });
   }catch(e){
     console.error('Errore inizializzazione autenticazione', e);
@@ -2648,6 +2671,7 @@ async function refresh(){
 
 (async function init(){
   initAuth();
+  initAdminAuth();
   renderAtleta();
   await refresh();
   pollTimer = setInterval(async ()=>{
