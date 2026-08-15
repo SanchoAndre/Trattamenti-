@@ -1233,7 +1233,7 @@ async function handleProfilePhoto(input){
     ctx.drawImage(img, (img.width-side)/2, (img.height-side)/2, side, side, 0, 0, size, size);
     pendingPhotoData = canvas.toDataURL('image/jpeg', 0.8);
     const preview = document.getElementById('photo-preview');
-    if(preview) preview.src = pendingPhotoData;
+    if(preview){ preview.src = pendingPhotoData; preview.style.display = ''; }
   }catch(e){
     showToast('Impossibile caricare questa immagine.');
   }
