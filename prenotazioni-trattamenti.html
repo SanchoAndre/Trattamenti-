@@ -1345,7 +1345,7 @@ function configBanner(){
 }
 
 function renderAuthBar(){
-  const photo = userProfile && userProfile.photo;
+  const photo = safePhotoSrc(userProfile && userProfile.photo);
   const name = (userProfile && userProfile.username) || (currentUser && currentUser.email) || '';
   return `<div class="authbar">
     ${photo ? `<img class="avatarimg" src="${photo}" alt="">` : '<span class="avatarimg avatarplaceholder">👤</span>'}
@@ -1370,7 +1370,7 @@ function renderAuthGate(){
   }
 
   if(currentUser && (!userProfile || !userProfile.username)){
-    const photo = pendingPhotoData || (userProfile && userProfile.photo) || '';
+    const photo = safePhotoSrc(pendingPhotoData || (userProfile && userProfile.photo) || '');
     return `<div class="authmodal">
       <h3>Completa il tuo profilo</h3>
       <p class="authhint">Un'ultima cosa prima di poter prenotare.</p>
@@ -1400,7 +1400,7 @@ function renderAuthGate(){
 
   const view = (authView === 'register') ? 'register' : 'login';
   if(view === 'register'){
-    const photo = pendingPhotoData || '';
+    const photo = safePhotoSrc(pendingPhotoData || '');
     return `<div class="authmodal">
       <div class="authtabs">
         <button class="authtab" onclick="openAuth('login')">Accedi</button>
@@ -1696,13 +1696,23 @@ function formatDayShort(dateStr){
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 function escapeJs(str){
-  return String(str).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  return String(str)
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'")
+    .replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;');
 }
 
 function escapeHtml(str){
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+function safePhotoSrc(photo){
+  if(typeof photo !== 'string') return '';
+  return /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/]+=*$/.test(photo) ? photo : '';
 }
 
 function autoGrow(el){
