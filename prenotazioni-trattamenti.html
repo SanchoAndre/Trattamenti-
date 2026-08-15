@@ -412,6 +412,42 @@
   .mscore.tie{color:var(--taken);}
   .mscore.live{color:var(--amber-dark);}
   .mscore.live .mresult{color:var(--amber-dark); animation:pulse 1.6s ease-in-out infinite;}
+  .quickscore{
+    display:flex;
+    gap:8px;
+    margin-top:9px;
+  }
+  .qsteam{
+    flex:1;
+    min-width:0;
+    background:var(--sage-bg);
+    border-radius:10px;
+    padding:7px 9px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .qsteam span{
+    font-size:11px;
+    color:var(--taken);
+    font-weight:600;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    flex:1;
+    min-width:0;
+  }
+  .qsteam b{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:17px;
+    color:var(--ink);
+    flex:none;
+  }
+  .qsteam button{
+    flex:none;
+    padding:5px 10px;
+    font-size:12.5px;
+  }
   @keyframes pulse{0%,100%{opacity:.85;} 50%{opacity:.4;}}
   .mresult{
     font-family:'Inter',sans-serif;
@@ -713,6 +749,7 @@ let editingAdminId = null;
 let announcement = '';
 let matches = [];
 let editingMatchId = null;
+let editingScoreId = null;
 let partiteFilterTeam = 'tutte';
 let partiteFilterDay = 'tutti';
 let mapVisible = false;
@@ -1310,6 +1347,7 @@ function buildPartiteAdminHtml(){
       html += `<div class="daygroup"><div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>`;
       g.items.forEach(m=>{
         const editing = editingMatchId === m.id;
+        const scoreEditing = editingScoreId === m.id;
         html += `<div class="slotcard">
           <div class="slotinfo">
             ${editing ? `
@@ -1336,10 +1374,32 @@ function buildPartiteAdminHtml(){
             <div class="bookedname">vs <b>${escapeHtml(m.opponent||'?')}</b></div>
             <div class="notetext">${m.time||'?'} · Campo ${escapeHtml(m.field||'?')}</div>
             ${matchScoreHtml(m)}
+            <div class="quickscore">
+              <div class="qsteam">
+                <span>Noi</span>
+                <b>${m.scoreUs ?? 0}</b>
+                <button class="btn-amber" onclick="incrementScore('${m.id}','us')">+1</button>
+              </div>
+              <div class="qsteam">
+                <span>${escapeHtml(m.opponent||'Avv.')}</span>
+                <b>${m.scoreOpp ?? 0}</b>
+                <button class="btn-amber" onclick="incrementScore('${m.id}','opp')">+1</button>
+              </div>
+            </div>
+            ${scoreEditing ? `
+            <div class="addgrid" style="margin-top:9px;">
+              <div><label>Punteggio nostro</label><input type="number" id="quickscore-us-${m.id}" value="${m.scoreUs ?? ''}" min="0" placeholder="es. 15"></div>
+              <div><label>Punteggio avversario</label><input type="number" id="quickscore-opp-${m.id}" value="${m.scoreOpp ?? ''}" min="0" placeholder="es. 12"></div>
+            </div>
             <div class="rowactions">
+              <button class="btn-primary" onclick="saveScoreOnly('${m.id}')">Salva punteggio</button>
+              <button class="btn-ghost" onclick="toggleScoreEdit(null)">Annulla</button>
+            </div>` : `
+            <div class="rowactions">
+              <button class="btn-ghost" onclick="toggleScoreEdit('${m.id}')">Aggiorna punteggio</button>
               <button class="btn-ghost" onclick="toggleEditMatch('${m.id}')">Modifica</button>
               <button class="btn-danger" onclick="deleteMatch('${m.id}')">Elimina</button>
-            </div>`}
+            </div>`}`}
           </div>
         </div>`;
       });
@@ -1404,7 +1464,59 @@ async function addMatch(){
 
 function toggleEditMatch(id){
   editingMatchId = id;
+  if(id !== null) editingScoreId = null;
   renderAdmin();
+}
+
+function toggleScoreEdit(id){
+  editingScoreId = id;
+  if(id !== null) editingMatchId = null;
+  renderAdmin();
+}
+
+async function incrementScore(id, side){
+  busy = true;
+  try{
+    matches = await fetchMatches();
+    const m = matches.find(x=>x.id===id);
+    if(!m){ showToast('Questa partita non esiste più.'); renderAdmin(); return; }
+    if(side==='us') m.scoreUs = (m.scoreUs ?? 0) + 1;
+    else m.scoreOpp = (m.scoreOpp ?? 0) + 1;
+    const ok = await persistMatches(matches);
+    if(!ok) showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+async function saveScoreOnly(id){
+  const usRaw = document.getElementById('quickscore-us-'+id).value;
+  const oppRaw = document.getElementById('quickscore-opp-'+id).value;
+  const us = usRaw === '' ? null : Number(usRaw);
+  const opp = oppRaw === '' ? null : Number(oppRaw);
+  if((usRaw !== '' && (isNaN(us) || us < 0)) || (oppRaw !== '' && (isNaN(opp) || opp < 0))){
+    showToast('Il punteggio deve essere un numero valido (0 o più).');
+    return;
+  }
+  busy = true;
+  try{
+    matches = await fetchMatches();
+    const m = matches.find(x=>x.id===id);
+    if(!m){ showToast('Questa partita non esiste più.'); editingScoreId = null; renderAdmin(); return; }
+    m.scoreUs = us; m.scoreOpp = opp;
+    const ok = await persistMatches(matches);
+    if(ok) showToast('Punteggio aggiornato');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    editingScoreId = null;
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
 }
 
 async function saveMatchEdit(id){
@@ -1604,6 +1716,7 @@ function doLogout(){
   adminView = 'gestione';
   editingAdminId = null;
   editingMatchId = null;
+  editingScoreId = null;
   renderAdmin();
 }
 
