@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inserimento partite iniziali</title>
+<style>
+  body{
+    font-family:-apple-system,system-ui,sans-serif;
+    max-width:480px;
+    margin:0 auto;
+    padding:28px 20px;
+    background:#F5F4EC;
+    color:#16332C;
+  }
+  h1{font-size:19px;}
+  #status{
+    background:#fff;
+    border:1px solid #E1DED0;
+    border-radius:12px;
+    padding:16px;
+    font-size:14.5px;
+    line-height:1.5;
+  }
+  .ok{color:#1C4B3E; font-weight:600;}
+  .err{color:#B5453D; font-weight:600;}
+  a{color:#1C4B3E;}
+</style>
+</head>
+<body>
+<h1>Inserimento partite iniziali</h1>
+<div id="status">Inserimento in corso…</div>
+
+<script>
+const FIREBASE_URL = 'https://trattamenti-9d1a0-default-rtdb.europe-west1.firebasedatabase.app';
+const MATCHES_PATH = 'prenotazioni-trattamenti/matches';
+
+const preset = [
+  { team:'Tequila Boom Boom', date:'2026-08-15', time:'15:00', field:'11', opponent:'Jinx', important:true },
+  { team:'Tequila Boom Boom', date:'2026-08-16', time:'15:00', field:'1', opponent:'Tokyo Mavericks', important:false },
+  { team:'Tequila Boom Boom', date:'2026-08-17', time:'11:00', field:'21', opponent:'Condor', important:false },
+  { team:'Tequila Boom Boom', date:'2026-08-17', time:'15:00', field:'9', opponent:'Sharks', important:false },
+  { team:'Cotarica Grandes', date:'2026-08-16', time:'13:00', field:'16', opponent:'Technicolor', important:true },
+  { team:'Cotarica Grandes', date:'2026-08-17', time:'09:00', field:'19', opponent:'New Age', important:false },
+  { team:'Cotarica Grandes', date:'2026-08-17', time:'17:00', field:'6', opponent:'Wall City', important:true },
+  { team:'Cotarica Grandes', date:'2026-08-18', time:'11:00', field:'21', opponent:'Catchup', important:false },
+  { team:'Cotarica Grandes', date:'2026-08-18', time:'15:00', field:'11', opponent:'Otakaro', important:true }
+];
+
+function uid(){
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+(async () => {
+  const statusEl = document.getElementById('status');
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${MATCHES_PATH}.json`);
+    if(!res.ok) throw new Error('Lettura fallita: HTTP ' + res.status);
+    const data = await res.json();
+    const existing = Array.isArray(data) ? data : [];
+
+    const existingKeys = new Set(existing.map(m => [m.team, m.date, m.time, m.opponent].join('|')));
+    const toAdd = preset.filter(p => !existingKeys.has([p.team, p.date, p.time, p.opponent].join('|')));
+
+    if(toAdd.length === 0){
+      statusEl.innerHTML = '<span class="ok">Le partite risultano già tutte presenti</span> (' + existing.length + ' partite totali nel database). Non ho aggiunto nulla per evitare doppioni.<br><br>Puoi tornare all\'app.';
+      return;
+    }
+
+    const merged = existing.concat(toAdd.map(p => Object.assign({ id: uid() }, p)));
+    const put = await fetch(`${FIREBASE_URL}/${MATCHES_PATH}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(merged)
+    });
+    if(!put.ok) throw new Error('Scrittura fallita: HTTP ' + put.status);
+
+    statusEl.innerHTML = '<span class="ok">Fatto!</span> Aggiunte ' + toAdd.length + ' partite (totale ora nel database: ' + merged.length + ').<br><br>Torna nell\'app e apri la scheda <b>Partite</b> per vederle.';
+  }catch(e){
+    statusEl.innerHTML = '<span class="err">Errore:</span> ' + e.message + '<br><br>Riprova tra qualche secondo, oppure segnalalo così controllo.';
+  }
+})();
+</script>
+</body>
+</html>
