@@ -1537,14 +1537,18 @@ function renderAtleta(){
     return;
   }
   if(isAdmin && !athleteReady()){
-    main.innerHTML = `<div class="authbar">👷 Sei collegato come staff. Per gestire gli orari vai nella scheda <b>Staff</b>.</div>`;
-    return;
+    const authHtml = `<div class="authbar">👷 Vista staff (sola lettura) — <b>${escapeHtml(currentAdminName)}</b></div>`;
+    return renderAtletaContent(main, authHtml, true);
   }
   if(!athleteReady()){
     main.innerHTML = renderAuthGate();
     return;
   }
   const authHtml = renderAuthBar();
+  renderAtletaContent(main, authHtml, false);
+}
+
+function renderAtletaContent(main, authHtml, viewOnly){
   if(!loaded){
     main.innerHTML = authHtml + '<div class="spin">Carico gli orari disponibili…</div>';
     return;
@@ -1598,7 +1602,7 @@ function renderAtleta(){
       const items = timeGroups[time];
       const paired = items.length > 1;
       html += `<div class="timerow">`;
-      items.forEach(s=>{ html += renderSlotCard(s, paired); });
+      items.forEach(s=>{ html += renderSlotCard(s, paired, viewOnly); });
       html += `</div>`;
     });
     html += `</div>`;
@@ -1623,9 +1627,20 @@ function getPeriod(time){
   return null;
 }
 
-function renderSlotCard(s, paired){
+function renderSlotCard(s, paired, viewOnly){
   const end = addMinutes(s.time, s.duration);
   const free = !s.name;
+  if(viewOnly){
+    return `<div class="slotcard ${paired?'paired':''}">
+    <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
+    <div class="slotinfo">
+      <span class="slottime">${s.time}–${end}</span>
+      <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
+      ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
+      ${!free ? `<div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}` : ''}
+    </div>
+  </div>`;
+  }
   const editing = editingAthleteId === s.id;
   const booking = bookingOpenId === s.id;
   const isOwner = !!(currentUser && s.bookedByUid && s.bookedByUid === currentUser.uid);
