@@ -553,6 +553,13 @@
     margin-top:2px;
   }
   .authmodal h3{margin:0 0 2px; font-size:17px;}
+  .authgatetitle{
+    margin:0 0 16px;
+    font-size:19px;
+    font-family:'Space Grotesk',sans-serif;
+    color:var(--ink);
+    text-align:center;
+  }
   .authhint{margin:0 0 14px; font-size:13px; color:var(--taken);}
   .authmodal label{
     display:block;
@@ -1402,6 +1409,7 @@ function renderAuthGate(){
   if(view === 'register'){
     const photo = safePhotoSrc(pendingPhotoData || '');
     return `<div class="authmodal">
+      <h2 class="authgatetitle">Registrati per prenotare la fisio</h2>
       <div class="authtabs">
         <button class="authtab" onclick="openAuth('login')">Accedi</button>
         <button class="authtab active">Registrati</button>
@@ -1437,6 +1445,7 @@ function renderAuthGate(){
   }
 
   return `<div class="authmodal">
+    <h2 class="authgatetitle">Registrati per prenotare la fisio</h2>
     <div class="authtabs">
       <button class="authtab active">Accedi</button>
       <button class="authtab" onclick="openAuth('register')">Registrati</button>
