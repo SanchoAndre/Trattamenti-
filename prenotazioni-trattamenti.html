@@ -1098,12 +1098,7 @@ function buildPartiteAdminHtml(){
     </div>`;
 
   if(matches.length===0){
-    html += `<div class="empty"><div class="icon">🥏</div>Non hai ancora inserito partite.</div>
-      <div class="addcard">
-        <h3>Importa calendario WUCC 2026</h3>
-        <p style="margin:-6px 0 12px; font-size:12.5px; color:var(--taken);">Carica in un tocco le 9 partite già note di Tequila Boom Boom e Cotarica Grandes.</p>
-        <button class="btn-amber" style="width:100%" onclick="importWuccSchedule()">Importa le 9 partite</button>
-      </div>`;
+    html += `<div class="empty"><div class="icon">🥏</div>Non hai ancora inserito partite. Usa il modulo qui sopra per aggiungerle una alla volta.</div>`;
   } else {
     html += `<div class="sectiontitle">Partite inserite (${matches.length})</div>`;
     const groups = groupByDay(matches);
@@ -1145,34 +1140,6 @@ function buildPartiteAdminHtml(){
     });
   }
   return html;
-}
-
-async function importWuccSchedule(){
-  if(!confirm('Importare le 9 partite di Tequila Boom Boom e Cotarica Grandes?')) return;
-  const preset = [
-    { team:'Tequila Boom Boom', date:'2026-08-15', time:'15:00', field:'11', opponent:'Jinx', important:true },
-    { team:'Tequila Boom Boom', date:'2026-08-16', time:'15:00', field:'1', opponent:'Tokyo Mavericks', important:false },
-    { team:'Tequila Boom Boom', date:'2026-08-17', time:'11:00', field:'21', opponent:'Condor', important:false },
-    { team:'Tequila Boom Boom', date:'2026-08-17', time:'15:00', field:'9', opponent:'Sharks', important:false },
-    { team:'Cotarica Grandes', date:'2026-08-16', time:'13:00', field:'16', opponent:'Technicolor', important:true },
-    { team:'Cotarica Grandes', date:'2026-08-17', time:'09:00', field:'19', opponent:'New Age', important:false },
-    { team:'Cotarica Grandes', date:'2026-08-17', time:'17:00', field:'6', opponent:'Wall City', important:true },
-    { team:'Cotarica Grandes', date:'2026-08-18', time:'11:00', field:'21', opponent:'Catchup', important:false },
-    { team:'Cotarica Grandes', date:'2026-08-18', time:'15:00', field:'11', opponent:'Otakaro', important:true }
-  ];
-  busy = true;
-  try{
-    matches = await fetchMatches();
-    preset.forEach(p => matches.push(Object.assign({ id: uid() }, p)));
-    const ok = await persistMatches(matches);
-    if(ok) showToast('Calendario importato ✓');
-    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
-    renderAdmin();
-  } catch(e){
-    showToast('Errore: ' + e.message);
-  } finally {
-    busy = false;
-  }
 }
 
 async function addMatch(){
