@@ -149,6 +149,30 @@
     align-items:flex-start;
     gap:12px;
   }
+  .timerow{
+    display:flex;
+    gap:8px;
+    align-items:stretch;
+  }
+  .timerow .slotcard{
+    flex:1;
+    min-width:0;
+  }
+  .timerow .slotcard.paired{
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    padding:11px 8px;
+    gap:6px;
+  }
+  .timerow .slotcard.paired .disc{
+    width:40px;
+    height:40px;
+  }
+  .timerow .slotcard.paired .disc .n{font-size:13px;}
+  .timerow .slotcard.paired .slotinfo{width:100%;}
+  .timerow .slotcard.paired .slottime{font-size:14.5px;}
+  .timerow .slotcard.paired .statuspill{margin-left:0; display:block; margin-top:4px; width:fit-content; margin-left:auto; margin-right:auto;}
   .disc{
     flex:none;
     width:48px;
@@ -647,6 +671,7 @@ let pollTimer = null;
 let busy = false;
 let lastSaveError = '';
 let editingAthleteId = null;
+let bookingOpenId = null;
 let editingAdminId = null;
 let announcement = '';
 let matches = [];
@@ -848,43 +873,62 @@ function renderAtleta(){
         <span class="dname">${formatDay(g.date)}</span>
         <span class="dcount">${freeCount} liber${freeCount===1?'o':'i'} su ${g.items.length}</span>
       </div>`;
+    const timeGroups = {};
     g.items.forEach(s=>{
-      const end = addMinutes(s.time, s.duration);
-      const free = !s.name;
-      const editing = editingAthleteId === s.id;
-      html += `<div class="slotcard">
-        <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
-        <div class="slotinfo">
-          <span class="slottime">${s.time}–${end}</span>
-          <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
-          ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
-          ${free ? `
-          <div class="bookform">
-            <input type="text" id="name-${s.id}" placeholder="Nome e cognome" maxlength="60">
-            <textarea class="autonote" id="note-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" rows="1" oninput="autoGrow(this)"></textarea>
-            <button class="btn-primary" onclick="bookSlot('${s.id}')">Prenota</button>
-          </div>` : editing ? `
-          <div class="bookform">
-            <input type="text" id="editname-${s.id}" placeholder="Nome e cognome" maxlength="60" value="${escapeHtml(s.name)}">
-            <textarea class="autonote" id="editnote-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" rows="1" oninput="autoGrow(this)">${escapeHtml(s.note || '')}</textarea>
-            <button class="btn-primary" onclick="saveNameEdit('${s.id}')">Salva</button>
-          </div>
-          <div class="rowactions">
-            <button class="btn-ghost" onclick="toggleEditAthlete(null)">Annulla modifica</button>
-          </div>` : `
-          <div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>
-          ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
-          <div class="rowactions">
-            <button class="btn-ghost" onclick="toggleEditAthlete('${s.id}')">Cambia nome</button>
-            <button class="btn-danger" onclick="cancelBooking('${s.id}')">Annulla prenotazione</button>
-          </div>`}
-        </div>
-      </div>`;
+      const key = s.time || 'zzz';
+      if(!timeGroups[key]) timeGroups[key] = [];
+      timeGroups[key].push(s);
+    });
+    Object.keys(timeGroups).sort().forEach(time=>{
+      const items = timeGroups[time];
+      const paired = items.length > 1;
+      html += `<div class="timerow">`;
+      items.forEach(s=>{ html += renderSlotCard(s, paired); });
+      html += `</div>`;
     });
     html += `</div>`;
   });
   main.innerHTML = html;
   initAutoGrow();
+}
+
+function renderSlotCard(s, paired){
+  const end = addMinutes(s.time, s.duration);
+  const free = !s.name;
+  const editing = editingAthleteId === s.id;
+  const booking = bookingOpenId === s.id;
+  return `<div class="slotcard ${paired?'paired':''}">
+    <div class="disc ${free?'free':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
+    <div class="slotinfo">
+      <span class="slottime">${s.time}–${end}</span>
+      <span class="statuspill ${free?'free':'taken'}">${free?'Libero':'Occupato'}</span>
+      ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
+      ${free ? (booking ? `
+      <div class="bookform">
+        <input type="text" id="name-${s.id}" placeholder="Nome e cognome" maxlength="60">
+        <textarea class="autonote" id="note-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" rows="1" oninput="autoGrow(this)"></textarea>
+        <button class="btn-primary" onclick="bookSlot('${s.id}')">Conferma prenotazione</button>
+      </div>
+      <div class="rowactions">
+        <button class="btn-ghost" onclick="toggleBookForm(null)">Annulla</button>
+      </div>` : `
+      <button class="btn-primary" style="width:100%; margin-top:9px;" onclick="toggleBookForm('${s.id}')">Prenota</button>`) : editing ? `
+      <div class="bookform">
+        <input type="text" id="editname-${s.id}" placeholder="Nome e cognome" maxlength="60" value="${escapeHtml(s.name)}">
+        <textarea class="autonote" id="editnote-${s.id}" placeholder="Nota per il fisio (facoltativa)" maxlength="140" rows="1" oninput="autoGrow(this)">${escapeHtml(s.note || '')}</textarea>
+        <button class="btn-primary" onclick="saveNameEdit('${s.id}')">Salva</button>
+      </div>
+      <div class="rowactions">
+        <button class="btn-ghost" onclick="toggleEditAthlete(null)">Annulla modifica</button>
+      </div>` : `
+      <div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>
+      ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
+      <div class="rowactions">
+        <button class="btn-ghost" onclick="toggleEditAthlete('${s.id}')">Cambia nome</button>
+        <button class="btn-danger" onclick="cancelBooking('${s.id}')">Annulla prenotazione</button>
+      </div>`}
+    </div>
+  </div>`;
 }
 
 function renderPartite(){
@@ -1004,13 +1048,13 @@ async function bookSlot(id){
   try{
     slots = await fetchSlots();
     const slot = slots.find(s=>s.id===id);
-    if(!slot){ showToast('Questo slot non esiste più.'); loaded=true; renderAtleta(); return; }
-    if(slot.name){ showToast('Slot appena occupato da un altro atleta.'); renderAtleta(); return; }
+    if(!slot){ showToast('Questo slot non esiste più.'); loaded=true; bookingOpenId = null; renderAtleta(); return; }
+    if(slot.name){ showToast('Slot appena occupato da un altro atleta.'); bookingOpenId = null; renderAtleta(); return; }
     slot.name = name;
     slot.note = note || null;
     slot.bookedAt = Date.now();
     const ok = await persistSlots(slots);
-    if(ok){ showToast('Prenotazione confermata ✓'); }
+    if(ok){ showToast('Prenotazione confermata ✓'); bookingOpenId = null; }
     else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.name = null; slot.note = null; }
     renderAtleta();
   } catch(e){
@@ -1064,6 +1108,11 @@ async function toggleDone(id){
 
 function toggleEditAthlete(id){
   editingAthleteId = id;
+  renderAtleta();
+}
+
+function toggleBookForm(id){
+  bookingOpenId = id;
   renderAtleta();
 }
 
