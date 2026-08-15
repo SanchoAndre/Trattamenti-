@@ -474,8 +474,14 @@
   }
   .rowactions{
     display:flex;
+    flex-wrap:wrap;
     gap:6px;
     margin-top:9px;
+  }
+  .rowactions button{
+    flex:1 1 auto;
+    min-width:0;
+    white-space:normal;
   }
   .sectiontitle{
     font-size:13px;
@@ -925,7 +931,7 @@ function renderSlotCard(s, paired){
       ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
       <div class="rowactions">
         <button class="btn-ghost" onclick="toggleEditAthlete('${s.id}')">Cambia nome</button>
-        <button class="btn-danger" onclick="cancelBooking('${s.id}')">Annulla prenotazione</button>
+        <button class="btn-danger" onclick="cancelBooking('${s.id}')">Annulla</button>
       </div>`}
     </div>
   </div>`;
