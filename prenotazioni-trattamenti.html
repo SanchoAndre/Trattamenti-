@@ -240,6 +240,13 @@
     word-break:break-word;
     margin-bottom:2px;
   }
+  .fasciaturalist{margin-top:8px;}
+  .fasciaturaentry{
+    padding:7px 0;
+    border-top:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .fasciaturaentry:first-child{border-top:none;}
   .bookedname b{color:var(--ink);}
   .bookform{
     margin-top:9px;
@@ -950,6 +957,7 @@ let busy = false;
 let lastSaveError = '';
 let editingAthleteId = null;
 let bookingOpenId = null;
+let editingFasciaturaEntry = null;
 let editingAdminId = null;
 let announcement = '';
 let matches = [];
@@ -1703,8 +1711,11 @@ function renderAtleta(){
 function renderUpcomingReminder(){
   if(!currentUser) return '';
   const now = new Date();
+  const isMineOwned = s => s.type === 'fasciatura'
+    ? (Array.isArray(s.bookings) && s.bookings.some(b=>b.bookedByUid === currentUser.uid))
+    : (s.bookedByUid === currentUser.uid);
   const mine = slots.filter(s=>{
-    if(!s.bookedByUid || s.bookedByUid !== currentUser.uid) return false;
+    if(!isMineOwned(s)) return false;
     if(!s.date || !s.time) return false;
     const end = addMinutes(s.time, s.duration || 0);
     const endMoment = new Date(`${s.date}T${end}:00`);
@@ -1713,7 +1724,7 @@ function renderUpcomingReminder(){
   }).sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
   if(mine.length === 0) return '';
   return `<div class="reminderbox">
-    ${mine.map(s=>`<div class="reminderline">⏰ <b>Promemoria:</b> il tuo trattamento è <b>${formatDayShort(s.date)}</b> alle <b>${s.time}</b>${s.physio?` con ${escapeHtml(s.physio)}`:''}</div>`).join('')}
+    ${mine.map(s=>`<div class="reminderline">⏰ <b>Promemoria:</b> ${s.type==='fasciatura'?'la tua fasciatura è':'il tuo trattamento è'} <b>${formatDayShort(s.date)}</b> alle <b>${s.time}</b>${s.physio?` con ${escapeHtml(s.physio)}`:''}</div>`).join('')}
   </div>`;
 }
 
@@ -1798,7 +1809,61 @@ function getPeriod(time){
   return null;
 }
 
+function renderFasciaturaCard(s, paired, viewOnly){
+  const end = addMinutes(s.time, s.duration);
+  const bookings = Array.isArray(s.bookings) ? s.bookings : [];
+  const myBooking = (!viewOnly && currentUser) ? bookings.find(b => b.bookedByUid === currentUser.uid) : null;
+  const joining = bookingOpenId === s.id;
+
+  const listHtml = bookings.length === 0
+    ? `<div class="notetext">Nessuno ancora iscritto.</div>`
+    : bookings.map(b=>{
+        const isMine = !viewOnly && currentUser && b.bookedByUid === currentUser.uid;
+        const isEditingThis = !viewOnly && editingFasciaturaEntry && editingFasciaturaEntry.slotId === s.id && editingFasciaturaEntry.bookingId === b.id;
+        if(isEditingThis){
+          return `<div class="fasciaturaentry">
+            <textarea class="autonote" id="fasc-editnote-${b.id}" placeholder="Cosa serve fare (facoltativo)" maxlength="140" rows="1" oninput="autoGrow(this)">${escapeHtml(b.note || '')}</textarea>
+            <div class="rowactions">
+              <button class="btn-primary" onclick="saveFasciaturaEntry('${s.id}','${b.id}')">Salva</button>
+              <button class="btn-ghost" onclick="toggleEditFasciaturaEntry(null,null)">Annulla</button>
+            </div>
+          </div>`;
+        }
+        return `<div class="fasciaturaentry">
+          <span class="bookedname">${escapeHtml(b.name)}</span>${b.note ? `<span class="notetext"> — ${escapeHtml(b.note)}</span>` : ''}
+          ${isMine ? `
+          <div class="rowactions">
+            <button class="btn-ghost" onclick="toggleEditFasciaturaEntry('${s.id}','${b.id}')">Modifica</button>
+            <button class="btn-danger" onclick="leaveFasciatura('${s.id}','${b.id}')">Rimuovi</button>
+          </div>` : ''}
+        </div>`;
+      }).join('');
+
+  const joinHtml = viewOnly ? '' : (myBooking ? '' : (joining ? `
+    <div class="bookform">
+      <div class="bookingasname">Ti aggiungi come: <b>${escapeHtml(userProfile.username)}</b></div>
+      <textarea class="autonote" id="fasc-note-${s.id}" placeholder="Cosa devi fare (es. caviglia destra)" maxlength="140" rows="1" oninput="autoGrow(this)"></textarea>
+      <button class="btn-primary" onclick="joinFasciatura('${s.id}')">Conferma</button>
+    </div>
+    <div class="rowactions">
+      <button class="btn-ghost" onclick="toggleBookForm(null)">Annulla</button>
+    </div>` : `
+    <button class="btn-primary" style="width:100%; margin-top:9px;" onclick="toggleBookForm('${s.id}')">Aggiungiti</button>`));
+
+  return `<div class="slotcard ${paired?'paired':''}">
+    <div class="disc taken"><span class="n">${s.duration}</span><span class="u">min</span></div>
+    <div class="slotinfo">
+      <span class="slottime">${s.time}–${end}</span>
+      <span class="statuspill taken">🩹 Fasciature — ${bookings.length} iscritt${bookings.length===1?'o':'i'}</span>
+      ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
+      <div class="fasciaturalist">${listHtml}</div>
+      ${joinHtml}
+    </div>
+  </div>`;
+}
+
 function renderSlotCard(s, paired, viewOnly){
+  if(s.type === 'fasciatura') return renderFasciaturaCard(s, paired, viewOnly);
   const end = addMinutes(s.time, s.duration);
   const free = !s.name;
   if(viewOnly){
@@ -2029,20 +2094,132 @@ async function bookSlot(id){
   }
 }
 
+async function joinFasciatura(id){
+  if(!currentUser){ openAuth('login'); return; }
+  if(currentUser.providerData[0] && currentUser.providerData[0].providerId === 'password' && !currentUser.emailVerified){
+    showToast('Verifica prima la tua email per poter prenotare.');
+    return;
+  }
+  if(!userProfile || !userProfile.username){
+    authView = 'completeProfile';
+    renderAtleta();
+    return;
+  }
+  const noteInput = document.getElementById('fasc-note-'+id);
+  const note = noteInput ? (noteInput.value || '').trim() : '';
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===id);
+    if(!slot || slot.type !== 'fasciatura'){ showToast('Questa fascia non esiste più.'); bookingOpenId = null; renderAtleta(); return; }
+    if(!Array.isArray(slot.bookings)) slot.bookings = [];
+    if(slot.bookings.some(b=>b.bookedByUid === currentUser.uid)){
+      showToast('Sei già iscritto a questa fascia.');
+      bookingOpenId = null;
+      renderAtleta();
+      return;
+    }
+    const entry = { id: uid(), name: userProfile.username, note: note || null, bookedByUid: currentUser.uid, bookedAt: Date.now() };
+    slot.bookings.push(entry);
+    const ok = await persistSlots(slots);
+    if(ok){ showToast('Ti sei aggiunto ✓'); bookingOpenId = null; }
+    else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.bookings = slot.bookings.filter(b=>b.id!==entry.id); }
+    renderAtleta();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+    renderAtleta();
+  } finally {
+    busy = false;
+  }
+}
+
+async function leaveFasciatura(slotId, bookingId){
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===slotId);
+    if(!slot || !Array.isArray(slot.bookings)){ busy = false; return; }
+    const entry = slot.bookings.find(b=>b.id===bookingId);
+    if(!isAdmin){
+      if(!currentUser || !entry || entry.bookedByUid !== currentUser.uid){
+        showToast('Puoi rimuovere solo la tua iscrizione.');
+        busy = false;
+        return;
+      }
+    }
+    if(!confirm('Rimuovere questa iscrizione?')){ busy = false; return; }
+    slot.bookings = slot.bookings.filter(b=>b.id!==bookingId);
+    const ok = await persistSlots(slots);
+    if(ok) showToast('Rimosso dalla fascia');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    if(currentTab==='admin') renderAdmin(); else renderAtleta();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+function toggleEditFasciaturaEntry(slotId, bookingId){
+  editingFasciaturaEntry = (slotId && bookingId) ? { slotId, bookingId } : null;
+  renderAtleta();
+}
+
+async function saveFasciaturaEntry(slotId, bookingId){
+  if(!currentUser){ return; }
+  const noteInput = document.getElementById('fasc-editnote-'+bookingId);
+  const note = noteInput ? (noteInput.value || '').trim() : '';
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===slotId);
+    if(!slot || !Array.isArray(slot.bookings)){ editingFasciaturaEntry = null; renderAtleta(); return; }
+    const entry = slot.bookings.find(b=>b.id===bookingId);
+    if(!entry || entry.bookedByUid !== currentUser.uid){
+      showToast('Puoi modificare solo la tua iscrizione.');
+      editingFasciaturaEntry = null;
+      renderAtleta();
+      return;
+    }
+    entry.note = note || null;
+    const ok = await persistSlots(slots);
+    if(ok) showToast('Nota aggiornata ✓');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    editingFasciaturaEntry = null;
+    renderAtleta();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
 async function cancelBooking(id){
   busy = true;
   try{
     slots = await fetchSlots();
     const slot = slots.find(s=>s.id===id);
-    if(!slot) { busy = false; return; }
+    if(!slot) { return; }
+    if(slot.type === 'fasciatura'){
+      if(!isAdmin){
+        showToast('Solo lo staff può liberare tutta la fascia.');
+        return;
+      }
+      if(!confirm('Rimuovere tutti gli iscritti da questa fascia?')) return;
+      slot.bookings = [];
+      const ok = await persistSlots(slots);
+      if(ok) showToast('Fascia liberata');
+      else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+      if(currentTab==='admin') renderAdmin(); else renderAtleta();
+      return;
+    }
     if(!isAdmin){
       if(!currentUser || !slot.bookedByUid || slot.bookedByUid !== currentUser.uid){
         showToast('Puoi annullare solo le tue prenotazioni.');
-        busy = false;
         return;
       }
     }
-    if(!confirm('Annullare questa prenotazione?')){ busy = false; return; }
+    if(!confirm('Annullare questa prenotazione?')){ return; }
     slot.name = null;
     slot.note = null;
     slot.bookedAt = null;
@@ -2433,6 +2610,27 @@ function buildSvoltiHtml(){
     html += `<div class="daygroup"><div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>`;
     g.items.forEach(s=>{
       const end = addMinutes(s.time, s.duration);
+      if(s.type === 'fasciatura'){
+        const bks = Array.isArray(s.bookings) ? s.bookings : [];
+        html += `<div class="slotcard">
+        <div class="disc done"><span class="n">${s.duration}</span><span class="u">min</span></div>
+        <div class="slotinfo">
+          <span class="slottime">${s.time}–${end}</span>
+          <span class="statuspill done">🩹 Fasciature svolto ✓ — ${bks.length} iscritt${bks.length===1?'o':'i'}</span>
+          ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
+          <div class="fasciaturalist">
+            ${bks.length===0 ? `<div class="notetext">Nessuno era iscritto.</div>` : bks.map(b=>`<div class="fasciaturaentry">
+              <span class="bookedname">${escapeHtml(b.name)}</span>${b.note ? `<span class="notetext"> — ${escapeHtml(b.note)}</span>` : ''}
+            </div>`).join('')}
+          </div>
+          <div class="rowactions">
+            <button class="btn-ghost" onclick="toggleDone('${s.id}')">Segna non svolto</button>
+            <button class="btn-danger" onclick="deleteSlot('${s.id}')">Elimina</button>
+          </div>
+        </div>
+      </div>`;
+        return;
+      }
       html += `<div class="slotcard">
         <div class="disc done"><span class="n">${s.duration}</span><span class="u">min</span></div>
         <div class="slotinfo">
@@ -2471,6 +2669,7 @@ function buildGestioneHtml(){
         <div><label>Orario</label><input type="time" id="new-time" min="07:00" max="22:00"></div>
         <div><label>Durata (minuti)</label><input type="number" id="new-dur" value="30" min="5" step="5"></div>
         <div><label>Fisioterapista</label><select id="new-physio">${physioOptions(currentAdminName)}</select></div>
+        <div class="full"><label class="checklabel"><input type="checkbox" id="new-fasciatura"> Fascia fasciature (più persone insieme)</label></div>
       </div>
       <button class="btn-amber" style="width:100%" onclick="addSlot()">Aggiungi slot</button>
     </div>
@@ -2498,6 +2697,45 @@ function buildGestioneHtml(){
     groups.forEach(g=>{
       html += `<div class="daygroup"><div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>`;
       g.items.forEach(s=>{
+        if(s.type === 'fasciatura'){
+          const end = addMinutes(s.time, s.duration);
+          const bks = Array.isArray(s.bookings) ? s.bookings : [];
+          const editing = editingAdminId === s.id;
+          html += `<div class="slotcard">
+          <div class="disc ${s.done?'done':'taken'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
+          <div class="slotinfo">
+            ${editing ? `
+            <div class="addgrid" style="margin-top:2px;">
+              <div><label>Data</label><input type="date" id="edit-date-${s.id}" value="${s.date}"></div>
+              <div><label>Orario</label><input type="time" id="edit-time-${s.id}" value="${s.time}" min="07:00" max="22:00"></div>
+              <div><label>Durata (min)</label><input type="number" id="edit-dur-${s.id}" value="${s.duration}" min="5" step="5"></div>
+              <div><label>Fisioterapista</label><select id="edit-physio-${s.id}">${physioOptions(s.physio)}</select></div>
+              <div class="full"><label class="checklabel"><input type="checkbox" id="edit-done-${s.id}" ${s.done?'checked':''}> Trattamento svolto</label></div>
+            </div>
+            <div class="rowactions">
+              <button class="btn-primary" onclick="saveAdminEdit('${s.id}')">Salva modifiche</button>
+              <button class="btn-ghost" onclick="toggleEditAdmin(null)">Annulla</button>
+            </div>` : `
+            <span class="slottime">${s.time}–${end}</span>
+            <span class="statuspill taken">🩹 Fasciature — ${bks.length} iscritt${bks.length===1?'o':'i'}${s.done?' · Svolto ✓':''}</span>
+            ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
+            ${s.insertedBy ? `<div class="notetext">Inserito da: <b>${escapeHtml(s.insertedBy)}</b></div>` : ''}
+            <div class="fasciaturalist">
+              ${bks.length===0 ? `<div class="notetext">Nessuno ancora iscritto.</div>` : bks.map(b=>`<div class="fasciaturaentry">
+                <span class="bookedname">${escapeHtml(b.name)}</span>${b.note ? `<span class="notetext"> — ${escapeHtml(b.note)}</span>` : ''}
+                <div class="rowactions"><button class="btn-danger" onclick="leaveFasciatura('${s.id}','${b.id}')">Rimuovi</button></div>
+              </div>`).join('')}
+            </div>
+            <div class="rowactions">
+              <button class="btn-ghost" onclick="toggleEditAdmin('${s.id}')">Modifica</button>
+              <button class="btn-ghost" onclick="toggleDone('${s.id}')">${s.done?'Segna non svolto':'Segna svolto ✓'}</button>
+              ${bks.length>0 ? `<button class="btn-ghost" onclick="cancelBooking('${s.id}')">Libera tutti</button>` : ''}
+              <button class="btn-danger" onclick="deleteSlot('${s.id}')">Elimina</button>
+            </div>`}
+          </div>
+        </div>`;
+          return;
+        }
         const end = addMinutes(s.time, s.duration);
         const free = !s.name;
         const editing = editingAdminId === s.id;
@@ -2550,8 +2788,8 @@ function buildRiepilogoHtml(){
     return `<div class="empty"><div class="icon">📋</div>Non ci sono slot da riepilogare.</div>`;
   }
   const total = slots.length;
-  const booked = slots.filter(s=>s.name).length;
-  const done = slots.filter(s=>s.name && s.done).length;
+  const booked = slots.filter(s=> s.type==='fasciatura' ? (Array.isArray(s.bookings) && s.bookings.length>0) : s.name).length;
+  const done = slots.filter(s=> s.type==='fasciatura' ? (Array.isArray(s.bookings) && s.bookings.length>0 && s.done) : (s.name && s.done)).length;
   let html = `<div class="riepilogohead no-print">
       <div class="riepstat"><b>${total}</b> slot totali</div>
       <div class="riepstat"><b>${booked}</b> prenotati</div>
@@ -2565,6 +2803,16 @@ function buildRiepilogoHtml(){
       <div class="riepilogotable">`;
     g.items.forEach(s=>{
       const end = addMinutes(s.time, s.duration);
+      if(s.type === 'fasciatura'){
+        const bks = Array.isArray(s.bookings) ? s.bookings : [];
+        const label = bks.length===0 ? 'Libero (fasciature)' : '🩹 ' + bks.map(b=>b.name).join(', ') + (s.done ? ' ✓' : '');
+        html += `<div class="rieprow">
+          <span class="rieptime">${s.time}–${end}</span>
+          <span class="riepphysio">${s.physio ? escapeHtml(s.physio) : ''}</span>
+          <span class="riepname ${bks.length===0?'riepfree':''}">${escapeHtml(label)}</span>
+        </div>`;
+        return;
+      }
       html += `<div class="rieprow">
         <span class="rieptime">${s.time}–${end}</span>
         <span class="riepphysio">${s.physio ? escapeHtml(s.physio) : ''}</span>
@@ -2640,6 +2888,7 @@ async function addSlot(){
   const time = document.getElementById('new-time').value;
   const dur = Number(document.getElementById('new-dur').value);
   const physio = document.getElementById('new-physio').value;
+  const isFasciatura = document.getElementById('new-fasciatura').checked;
   if(!date || !time || !dur || dur<=0){
     showToast('Compila data, orario e durata.');
     return;
@@ -2651,9 +2900,12 @@ async function addSlot(){
   busy = true;
   try{
     slots = await fetchSlots();
-    slots.push({ id: uid(), date, time, duration: dur, physio, insertedBy: currentAdminName, name: null, note: null, done: false, bookedAt: null });
+    const newSlot = isFasciatura
+      ? { id: uid(), date, time, duration: dur, physio, insertedBy: currentAdminName, type: 'fasciatura', bookings: [], done: false }
+      : { id: uid(), date, time, duration: dur, physio, insertedBy: currentAdminName, name: null, note: null, done: false, bookedAt: null };
+    slots.push(newSlot);
     const ok = await persistSlots(slots);
-    if(ok) showToast('Slot aggiunto');
+    if(ok) showToast(isFasciatura ? 'Fascia fasciature aggiunta' : 'Slot aggiunto');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
     renderAdmin();
   } catch(e){
@@ -2760,9 +3012,6 @@ async function saveAdminEdit(id){
   const time = document.getElementById('edit-time-'+id).value;
   const dur = Number(document.getElementById('edit-dur-'+id).value);
   const physio = document.getElementById('edit-physio-'+id).value;
-  const name = document.getElementById('edit-name-'+id).value.trim();
-  const note = document.getElementById('edit-note-'+id).value.trim();
-  const done = document.getElementById('edit-done-'+id).checked;
   if(!date || !time || !dur || dur<=0){
     showToast('Compila data, orario e durata.');
     return;
@@ -2780,10 +3029,18 @@ async function saveAdminEdit(id){
     slot.time = time;
     slot.duration = dur;
     slot.physio = physio;
-    slot.name = name || null;
-    slot.note = name ? (note || null) : null;
-    slot.done = name ? done : false;
-    if(!name) slot.bookedAt = null;
+    if(slot.type === 'fasciatura'){
+      const doneEl = document.getElementById('edit-done-'+id);
+      if(doneEl) slot.done = doneEl.checked;
+    } else {
+      const name = document.getElementById('edit-name-'+id).value.trim();
+      const note = document.getElementById('edit-note-'+id).value.trim();
+      const done = document.getElementById('edit-done-'+id).checked;
+      slot.name = name || null;
+      slot.note = name ? (note || null) : null;
+      slot.done = name ? done : false;
+      if(!name) slot.bookedAt = null;
+    }
     const ok = await persistSlots(slots);
     if(ok) showToast('Slot aggiornato');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
@@ -2844,7 +3101,8 @@ async function pruneExpiredFreeSlots(currentSlots){
   const now = new Date();
   let removedAny = false;
   const kept = currentSlots.filter(s=>{
-    if(s.name) return true; // non tocco mai uno slot prenotato
+    const isFree = s.type === 'fasciatura' ? (!Array.isArray(s.bookings) || s.bookings.length === 0) : !s.name;
+    if(!isFree) return true; // non tocco mai uno slot/fascia con iscritti
     if(!s.date || !s.time) return true; // dati incompleti: per sicurezza non lo elimino
     const end = addMinutes(s.time, s.duration || 0);
     const endMoment = new Date(`${s.date}T${end}:00`);
