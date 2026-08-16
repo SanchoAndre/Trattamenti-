@@ -958,6 +958,7 @@ let lastSaveError = '';
 let editingAthleteId = null;
 let bookingOpenId = null;
 let editingFasciaturaEntry = null;
+let addingFasciaturaId = null;
 let editingAdminId = null;
 let announcement = '';
 let matches = [];
@@ -2160,6 +2161,38 @@ async function leaveFasciatura(slotId, bookingId){
   }
 }
 
+function toggleAddFasciaturaPerson(slotId){
+  addingFasciaturaId = slotId;
+  renderAdmin();
+}
+
+async function adminAddFasciaturaPerson(slotId){
+  const nameInput = document.getElementById('admin-fasc-name-'+slotId);
+  const noteInput = document.getElementById('admin-fasc-note-'+slotId);
+  const name = nameInput ? nameInput.value.trim() : '';
+  const note = noteInput ? noteInput.value.trim() : '';
+  if(!name){
+    showToast('Inserisci il nome della persona.');
+    return;
+  }
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===slotId);
+    if(!slot || slot.type !== 'fasciatura'){ showToast('Questa fascia non esiste più.'); addingFasciaturaId = null; renderAdmin(); return; }
+    if(!Array.isArray(slot.bookings)) slot.bookings = [];
+    slot.bookings.push({ id: uid(), name, note: note || null, bookedByUid: null, bookedAt: Date.now() });
+    const ok = await persistSlots(slots);
+    if(ok){ showToast('Persona aggiunta'); addingFasciaturaId = null; }
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
 function toggleEditFasciaturaEntry(slotId, bookingId){
   editingFasciaturaEntry = (slotId && bookingId) ? { slotId, bookingId } : null;
   renderAtleta();
@@ -2726,6 +2759,16 @@ function buildGestioneHtml(){
                 <div class="rowactions"><button class="btn-danger" onclick="leaveFasciatura('${s.id}','${b.id}')">Rimuovi</button></div>
               </div>`).join('')}
             </div>
+            ${addingFasciaturaId === s.id ? `
+            <div class="bookform">
+              <input type="text" id="admin-fasc-name-${s.id}" placeholder="Nome e cognome" maxlength="60">
+              <textarea class="autonote" id="admin-fasc-note-${s.id}" placeholder="Cosa deve fare (facoltativo)" maxlength="140" rows="1" oninput="autoGrow(this)"></textarea>
+              <button class="btn-primary" onclick="adminAddFasciaturaPerson('${s.id}')">Aggiungi</button>
+            </div>
+            <div class="rowactions">
+              <button class="btn-ghost" onclick="toggleAddFasciaturaPerson(null)">Annulla</button>
+            </div>` : `
+            <button class="btn-ghost" style="width:100%; margin-top:6px;" onclick="toggleAddFasciaturaPerson('${s.id}')">+ Aggiungi persona</button>`}
             <div class="rowactions">
               <button class="btn-ghost" onclick="toggleEditAdmin('${s.id}')">Modifica</button>
               <button class="btn-ghost" onclick="toggleDone('${s.id}')">${s.done?'Segna non svolto':'Segna svolto ✓'}</button>
