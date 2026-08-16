@@ -962,6 +962,26 @@ let loaded = false;
 let pollTimer = null;
 let busy = false;
 let lastSaveError = '';
+// ---------- scadenza sessione a 24 ore ----------
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+function recordSessionLogin(kind){
+  try{ localStorage.setItem('sessionLoginAt_' + kind, String(Date.now())); }catch(e){}
+}
+function getSessionLoginAt(kind){
+  try{
+    const v = localStorage.getItem('sessionLoginAt_' + kind);
+    return v ? Number(v) : null;
+  }catch(e){ return null; }
+}
+function clearSessionLogin(kind){
+  try{ localStorage.removeItem('sessionLoginAt_' + kind); }catch(e){}
+}
+function isSessionExpired(kind){
+  const t = getSessionLoginAt(kind);
+  if(!t) return false; // nessun accesso tracciato: sessione precedente all'introduzione di questa funzione, non forzo l'uscita
+  return (Date.now() - t) > SESSION_MAX_AGE_MS;
+}
+
 let editingAthleteId = null;
 let bookingOpenId = null;
 let editingFasciaturaEntry = null;
@@ -1039,6 +1059,11 @@ function initAdminAuth(){
   const auth = getAdminAuthInstance();
   if(!auth) return;
   auth.onAuthStateChanged((user)=>{
+    if(user && isSessionExpired('staff')){
+      clearSessionLogin('staff');
+      auth.signOut();
+      return;
+    }
     if(user){
       const match = ADMINS.find(a => a.authEmail === user.email);
       if(match){
@@ -1258,11 +1283,18 @@ function initAuth(){
     if(firebase.auth.Auth && firebase.auth.Auth.Persistence){
       firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
     }
-    firebase.auth().getRedirectResult().catch((e)=>{
+    firebase.auth().getRedirectResult().then((result)=>{
+      if(result && result.user) recordSessionLogin('athlete');
+    }).catch((e)=>{
       authError = translateAuthError(e);
       renderAtleta();
     });
     firebase.auth().onAuthStateChanged(async (user)=>{
+      if(user && isSessionExpired('athlete')){
+        clearSessionLogin('athlete');
+        firebase.auth().signOut();
+        return;
+      }
       currentUser = user;
       if(user){
         userProfile = await fetchUserProfile(user.uid);
@@ -1347,6 +1379,7 @@ async function doRegisterEmail(){
   }
   try{
     const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+    recordSessionLogin('athlete');
     await cred.user.sendEmailVerification();
     const ok = await saveUserProfile(cred.user.uid, {
       username, gender: gender ? gender.value : null, team, photo: pendingPhotoData || null, email
@@ -1378,6 +1411,7 @@ async function doLoginEmail(){
   }
   try{
     await firebase.auth().signInWithEmailAndPassword(email, password);
+    recordSessionLogin('athlete');
     authView = null;
     renderAtleta();
   }catch(e){
@@ -1457,6 +1491,7 @@ async function doAthleteLogout(){
   try{
     await firebase.auth().signOut();
   }catch(e){}
+  clearSessionLogin('athlete');
   currentUser = null;
   userProfile = null;
   authView = null;
@@ -2981,6 +3016,7 @@ async function doLogin(){
   if(match){
     isAdmin = true;
     currentAdminName = match.name;
+    recordSessionLogin('staff');
     document.getElementById('login-err').style.display = 'none';
     renderAdmin();
     await ensureAdminAuthSession(match);
@@ -2999,6 +3035,7 @@ function doLogout(){
   allUsers = [];
   allUsersLoaded = false;
   adminAthleteFilter = 'tutti';
+  clearSessionLogin('staff');
   if(adminAuthApp){
     try{ adminAuthApp.auth().signOut(); }catch(e){}
   }
@@ -3281,7 +3318,7 @@ async function refresh(){
   loaded = true;
   if(currentTab==='atleta') renderAtleta();
   else if(currentTab==='partite') renderPartite();
-  else if(isAdmin) renderAdmin();
+  else if(currentTab==='admin') renderAdmin();
 }
 
 (async function init(){
@@ -3289,6 +3326,14 @@ async function refresh(){
   renderAtleta();
   await refresh();
   pollTimer = setInterval(async ()=>{
+    if(currentUser && isSessionExpired('athlete')){
+      clearSessionLogin('athlete');
+      try{ await firebase.auth().signOut(); }catch(e){}
+    }
+    if(isAdmin && isSessionExpired('staff')){
+      clearSessionLogin('staff');
+      try{ if(adminAuthApp) await adminAuthApp.auth().signOut(); }catch(e){}
+    }
     const active = document.activeElement;
     const typing = active && typeof active.matches === 'function' && active.matches('input, textarea');
     if((currentTab==='atleta' || currentTab==='partite') && !typing && !busy){
