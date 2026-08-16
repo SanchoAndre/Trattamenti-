@@ -966,6 +966,9 @@ let editingAthleteId = null;
 let bookingOpenId = null;
 let editingFasciaturaEntry = null;
 let addingFasciaturaId = null;
+let allUsers = [];
+let allUsersLoaded = false;
+let adminAthleteFilter = 'tutti';
 let editingAdminId = null;
 let announcement = '';
 let matches = [];
@@ -1209,6 +1212,19 @@ async function fetchUserProfile(uid){
     return await res.json();
   }catch(e){
     return null;
+  }
+}
+async function fetchAllUsers(){
+  if(!isConfigured()) return [];
+  try{
+    const qs = await getAuthQueryParam();
+    const res = await fetch(`${FIREBASE_URL}/${USERS_PATH}.json${qs}`);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if(!data) return [];
+    return Object.keys(data).map(uid => Object.assign({ uid }, data[uid]));
+  }catch(e){
+    return [];
   }
 }
 async function saveUserProfile(uid, profile){
@@ -2369,17 +2385,69 @@ function renderAdmin(){
       <button class="subtabbtn ${adminView==='gestione'?'active':''}" onclick="switchAdminView('gestione')">Slot</button>
       <button class="subtabbtn ${adminView==='partite'?'active':''}" onclick="switchAdminView('partite')">Partite</button>
       <button class="subtabbtn ${adminView==='svolti'?'active':''}" onclick="switchAdminView('svolti')">Trattamenti svolti</button>
+      <button class="subtabbtn ${adminView==='atleti'?'active':''}" onclick="switchAdminView('atleti')">Atleti</button>
       <button class="subtabbtn ${adminView==='riepilogo'?'active':''}" onclick="switchAdminView('riepilogo')">Riepilogo</button>
     </div>`;
 
-  html += adminView === 'riepilogo' ? buildRiepilogoHtml() : (adminView === 'partite' ? buildPartiteAdminHtml() : (adminView === 'svolti' ? buildSvoltiHtml() : buildGestioneHtml()));
+  html += adminView === 'riepilogo' ? buildRiepilogoHtml() : (adminView === 'partite' ? buildPartiteAdminHtml() : (adminView === 'svolti' ? buildSvoltiHtml() : (adminView === 'atleti' ? buildAtletiHtml() : buildGestioneHtml())));
   main.innerHTML = html;
   initAutoGrow();
 }
 
 function switchAdminView(v){
   adminView = v;
+  if(v === 'atleti' && !allUsersLoaded){
+    loadAllUsers();
+  } else {
+    renderAdmin();
+  }
+}
+
+async function loadAllUsers(){
+  allUsers = await fetchAllUsers();
+  allUsersLoaded = true;
   renderAdmin();
+}
+
+function setAdminAthleteFilter(team){
+  adminAthleteFilter = team;
+  renderAdmin();
+}
+
+function buildAtletiHtml(){
+  const teams = [...new Set(allUsers.map(u=>u.team).filter(Boolean))].sort();
+  const filterHtml = `<div class="partitefilters">
+    <div class="filterrow">
+      <button class="filterpill ${adminAthleteFilter==='tutti'?'active':''}" onclick="setAdminAthleteFilter('tutti')">Tutti (${allUsers.length})</button>
+      ${teams.map(t=>{
+        const count = allUsers.filter(u=>u.team===t).length;
+        return `<button class="filterpill ${adminAthleteFilter===t?'active':''}" onclick="setAdminAthleteFilter('${escapeJs(t)}')">${escapeHtml(t)} (${count})</button>`;
+      }).join('')}
+    </div>
+  </div>`;
+  const filtered = adminAthleteFilter==='tutti' ? allUsers : allUsers.filter(u=>u.team===adminAthleteFilter);
+  const sorted = [...filtered].sort((a,b)=> (a.username||'').localeCompare(b.username||''));
+  let html = `<div class="addcard">
+    <h3>Atleti registrati</h3>
+    <button class="btn-ghost" style="width:100%" onclick="loadAllUsers()">↻ Aggiorna elenco</button>
+  </div>`;
+  html += filterHtml;
+  if(sorted.length===0){
+    html += `<div class="empty"><div class="icon">👤</div>Nessun atleta registrato${adminAthleteFilter!=='tutti' ? ' in questa squadra' : ''}.</div>`;
+    return html;
+  }
+  html += `<div class="sectiontitle">${sorted.length} atlet${sorted.length===1?'a':'i'}</div>`;
+  sorted.forEach(u=>{
+    const photo = safePhotoSrc(u.photo);
+    html += `<div class="slotcard">
+      ${photo ? `<img class="avatarimg" src="${photo}" alt="" style="width:44px; height:44px; flex:none;">` : '<div class="disc taken"><span class="n">👤</span></div>'}
+      <div class="slotinfo">
+        <span class="bookedname"><b>${escapeHtml(u.username || 'Senza nome')}</b></span>
+        ${u.team ? `<div class="notetext">Squadra: <b>${escapeHtml(u.team)}</b></div>` : '<div class="notetext">Squadra non indicata</div>'}
+      </div>
+    </div>`;
+  });
+  return html;
 }
 
 function buildPartiteAdminHtml(){
@@ -2897,6 +2965,9 @@ function doLogout(){
   editingAdminId = null;
   editingMatchId = null;
   editingScoreId = null;
+  allUsers = [];
+  allUsersLoaded = false;
+  adminAthleteFilter = 'tutti';
   if(adminAuthApp){
     try{ adminAuthApp.auth().signOut(); }catch(e){}
   }
