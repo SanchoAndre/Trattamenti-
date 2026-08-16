@@ -1019,7 +1019,13 @@ let adminAuthApp = null;
 function getAdminAuthInstance(){
   if(!isAuthReady()) return null;
   try{
-    if(!adminAuthApp) adminAuthApp = firebase.initializeApp(FIREBASE_CONFIG, 'adminSession');
+    if(!adminAuthApp){
+      adminAuthApp = firebase.initializeApp(FIREBASE_CONFIG, 'adminSession');
+      const a = adminAuthApp.auth();
+      if(firebase.auth.Auth && firebase.auth.Auth.Persistence){
+        a.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+      }
+    }
     return adminAuthApp.auth();
   }catch(e){
     console.error('Accesso staff non disponibile', e);
@@ -1249,6 +1255,9 @@ function initAuth(){
   try{
     if(!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.indexOf('INCOLLA') === 0) return;
     firebase.initializeApp(FIREBASE_CONFIG);
+    if(firebase.auth.Auth && firebase.auth.Auth.Persistence){
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+    }
     firebase.auth().getRedirectResult().catch((e)=>{
       authError = translateAuthError(e);
       renderAtleta();
