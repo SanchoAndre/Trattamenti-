@@ -210,6 +210,7 @@
   .disc.free{background:var(--free); color:#fff;}
   .disc.taken{background:var(--taken); color:#fff;}
   .disc.done{background:var(--pitch); color:#fff;}
+  .disc.noshow{background:var(--danger); color:#fff;}
   .disc .n{font-size:15px;}
   .disc .u{font-size:8px; letter-spacing:.04em; text-transform:uppercase; opacity:.9;}
   .slotinfo{flex:1; min-width:0;}
@@ -232,6 +233,7 @@
   .statuspill.free{background:var(--free-bg); color:var(--free);}
   .statuspill.taken{background:var(--taken-bg); color:var(--taken);}
   .statuspill.done{background:var(--sage-bg); color:var(--pitch-dark); box-shadow:inset 0 0 0 1px var(--pitch);}
+  .statuspill.noshow{background:#FBEFED; color:var(--danger); box-shadow:inset 0 0 0 1px var(--danger);}
   .bookedname{
     margin-top:4px;
     font-size:13.5px;
@@ -1803,7 +1805,7 @@ function renderAtletaContent(main, authHtml, viewOnly){
     return;
   }
   const announcementHtml = announcement ? `<div class="announcement">📣 ${escapeHtml(announcement).replace(/\n/g, '<br>')}</div>` : '';
-  const activeSlots = slots.filter(s=>!s.done);
+  const activeSlots = slots.filter(s=>!s.done && !s.noShow);
   if(activeSlots.length === 0){
     main.innerHTML = authHtml + announcementHtml + `<div class="empty"><div class="icon">🕒</div>
       <div>Nessuno slot è ancora stato pubblicato.<br>Torna a controllare più tardi.</div></div>`;
@@ -2344,9 +2346,30 @@ async function toggleDone(id){
     if(!slot) return;
     const newDone = !slot.done;
     slot.done = newDone;
+    if(newDone) slot.noShow = false;
     const ok = await persistSlots(slots);
     if(ok) showToast(newDone ? 'Trattamento segnato come svolto ✓' : 'Segnato come non svolto');
     else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.done = !newDone; }
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+async function toggleNoShow(id){
+  busy = true;
+  try{
+    slots = await fetchSlots();
+    const slot = slots.find(s=>s.id===id);
+    if(!slot) return;
+    const newNoShow = !slot.noShow;
+    slot.noShow = newNoShow;
+    if(newNoShow) slot.done = false;
+    const ok = await persistSlots(slots);
+    if(ok) showToast(newNoShow ? 'Segnato come non presentato' : 'Segnato di nuovo come attivo');
+    else { showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova')); slot.noShow = !newNoShow; }
     renderAdmin();
   } catch(e){
     showToast('Errore: ' + e.message);
@@ -2772,13 +2795,13 @@ async function deleteMatch(id){
 }
 
 function buildSvoltiHtml(){
-  const doneSlots = slots.filter(s=>s.done);
+  const doneSlots = slots.filter(s=>s.done || s.noShow);
   let html = '';
   if(doneSlots.length===0){
-    html += `<div class="empty"><div class="icon">✅</div>Nessun trattamento ancora segnato come svolto.</div>`;
+    html += `<div class="empty"><div class="icon">✅</div>Nessun trattamento ancora segnato come svolto o non presentato.</div>`;
     return html;
   }
-  html += `<div class="sectiontitle">Trattamenti svolti (${doneSlots.length})</div>`;
+  html += `<div class="sectiontitle">Trattamenti svolti e non presentati (${doneSlots.length})</div>`;
   const groups = groupByDay(doneSlots);
   groups.forEach(g=>{
     html += `<div class="daygroup"><div class="dayhead"><span class="dname">${formatDay(g.date)}</span></div>`;
@@ -2806,15 +2829,17 @@ function buildSvoltiHtml(){
         return;
       }
       html += `<div class="slotcard">
-        <div class="disc done"><span class="n">${s.duration}</span><span class="u">min</span></div>
+        <div class="disc ${s.noShow?'noshow':'done'}"><span class="n">${s.duration}</span><span class="u">min</span></div>
         <div class="slotinfo">
           <span class="slottime">${s.time}–${end}</span>
-          <span class="statuspill done">Svolto ✓</span>
+          <span class="statuspill ${s.noShow?'noshow':'done'}">${s.noShow?'❌ Non presentato':'Svolto ✓'}</span>
           ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
           ${s.name ? `<div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>` : ''}
           ${s.note ? `<div class="notetext">Nota: <b>${escapeHtml(s.note)}</b></div>` : ''}
           <div class="rowactions">
-            <button class="btn-ghost" onclick="toggleDone('${s.id}')">Segna non svolto</button>
+            ${s.noShow
+              ? `<button class="btn-ghost" onclick="toggleNoShow('${s.id}')">Annulla non presentato</button>`
+              : `<button class="btn-ghost" onclick="toggleDone('${s.id}')">Segna non svolto</button>`}
             <button class="btn-danger" onclick="deleteSlot('${s.id}')">Elimina</button>
           </div>
         </div>
@@ -2862,7 +2887,7 @@ function buildGestioneHtml(){
       <button class="btn-amber" style="width:100%" onclick="generateSlots()">Genera slot</button>
     </div>`;
 
-  const activeSlots = slots.filter(s=>!s.done);
+  const activeSlots = slots.filter(s=>!s.done && !s.noShow);
   if(activeSlots.length===0){
     html += `<div class="empty"><div class="icon">📋</div>Non hai ancora inserito slot.</div>`;
   } else {
@@ -2935,13 +2960,14 @@ function buildGestioneHtml(){
               <div class="full"><label>Nome (vuoto = libero)</label><input type="text" id="edit-name-${s.id}" value="${s.name ? escapeHtml(s.name) : ''}" maxlength="60"></div>
               <div class="full"><label>Nota</label><textarea class="autonote" id="edit-note-${s.id}" maxlength="140" rows="1" oninput="autoGrow(this)">${s.note ? escapeHtml(s.note) : ''}</textarea></div>
               <div class="full"><label class="checklabel"><input type="checkbox" id="edit-done-${s.id}" ${s.done?'checked':''}> Trattamento svolto</label></div>
+              <div class="full"><label class="checklabel"><input type="checkbox" id="edit-noshow-${s.id}" ${s.noShow?'checked':''}> Non presentato</label></div>
             </div>
             <div class="rowactions">
               <button class="btn-primary" onclick="saveAdminEdit('${s.id}')">Salva modifiche</button>
               <button class="btn-ghost" onclick="toggleEditAdmin(null)">Annulla</button>
             </div>` : `
             <span class="slottime">${s.time}–${end}</span>
-            <span class="statuspill ${free?'free':(s.done?'done':'taken')}">${free?'Libero':(s.done?'Svolto ✓':'Occupato')}</span>
+            <span class="statuspill ${free?'free':(s.done?'done':(s.noShow?'noshow':'taken'))}">${free?'Libero':(s.done?'Svolto ✓':(s.noShow?'Non presentato':'Occupato'))}</span>
             ${s.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(s.physio)}</b></div>` : ''}
             ${s.insertedBy ? `<div class="notetext">Inserito da: <b>${escapeHtml(s.insertedBy)}</b></div>` : ''}
             ${!free ? `<div class="bookedname">Prenotato da <b>${escapeHtml(s.name)}</b></div>` : ''}
@@ -2949,6 +2975,7 @@ function buildGestioneHtml(){
             <div class="rowactions">
               <button class="btn-ghost" onclick="toggleEditAdmin('${s.id}')">Modifica</button>
               ${!free ? `<button class="btn-ghost" onclick="toggleDone('${s.id}')">${s.done?'Segna non svolto':'Segna svolto ✓'}</button>` : ''}
+              ${!free ? `<button class="btn-ghost" onclick="toggleNoShow('${s.id}')">${s.noShow?'Annulla non presentato':'❌ Non presentato'}</button>` : ''}
               ${!free ? `<button class="btn-ghost" onclick="cancelBooking('${s.id}')">Libera slot</button>` : ''}
               <button class="btn-danger" onclick="deleteSlot('${s.id}')">Elimina</button>
             </div>`}
@@ -2974,11 +3001,13 @@ function buildRiepilogoHtml(){
   const total = slots.length;
   const booked = slots.filter(s=> s.type==='fasciatura' ? (Array.isArray(s.bookings) && s.bookings.length>0) : s.name).length;
   const done = slots.filter(s=> s.type==='fasciatura' ? (Array.isArray(s.bookings) && s.bookings.length>0 && s.done) : (s.name && s.done)).length;
+  const noShowCount = slots.filter(s=> s.type!=='fasciatura' && s.name && s.noShow).length;
   let html = `<div class="riepilogohead no-print">
       <div class="riepstat"><b>${total}</b> slot totali</div>
       <div class="riepstat"><b>${booked}</b> prenotati</div>
       <div class="riepstat"><b>${total-booked}</b> liberi</div>
       <div class="riepstat"><b>${done}</b> svolti</div>
+      <div class="riepstat"><b>${noShowCount}</b> non presentati</div>
       <button class="btn-ghost" onclick="window.print()">Stampa</button>
     </div>`;
   const groups = groupByDay(slots);
@@ -2997,10 +3026,11 @@ function buildRiepilogoHtml(){
         </div>`;
         return;
       }
+      const nameLabel = s.name ? (s.noShow ? escapeHtml(s.name) + ' ❌' : escapeHtml(s.name) + (s.done ? ' ✓' : '')) : 'Libero';
       html += `<div class="rieprow">
         <span class="rieptime">${s.time}–${end}</span>
         <span class="riepphysio">${s.physio ? escapeHtml(s.physio) : ''}</span>
-        <span class="riepname ${s.name?'':'riepfree'}">${s.name ? escapeHtml(s.name) + (s.done ? ' ✓' : '') : 'Libero'}</span>
+        <span class="riepname ${s.name?'':'riepfree'}">${nameLabel}</span>
       </div>`;
     });
     html += `</div></div>`;
@@ -3225,9 +3255,12 @@ async function saveAdminEdit(id){
       const name = document.getElementById('edit-name-'+id).value.trim();
       const note = document.getElementById('edit-note-'+id).value.trim();
       const done = document.getElementById('edit-done-'+id).checked;
+      const noShowEl = document.getElementById('edit-noshow-'+id);
+      const noShow = noShowEl ? noShowEl.checked : false;
       slot.name = name || null;
       slot.note = name ? (note || null) : null;
-      slot.done = name ? done : false;
+      slot.done = name ? (done && !noShow) : false;
+      slot.noShow = name ? noShow : false;
       if(!name) slot.bookedAt = null;
     }
     const ok = await persistSlots(slots);
