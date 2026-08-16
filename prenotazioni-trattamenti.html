@@ -2361,6 +2361,7 @@ async function saveNameEdit(id){
 
 // ---------- render: admin ----------
 function renderAdmin(){
+  initAdminAuth();
   const main = document.getElementById('main');
   if(!isAdmin){
     main.innerHTML = `<div class="loginbox">
@@ -3285,7 +3286,6 @@ async function refresh(){
 
 (async function init(){
   initAuth();
-  initAdminAuth();
   renderAtleta();
   await refresh();
   pollTimer = setInterval(async ()=>{
