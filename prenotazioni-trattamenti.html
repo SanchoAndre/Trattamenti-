@@ -2528,6 +2528,7 @@ function buildPartiteAdminHtml(){
             </div>` : `
             <div class="rowactions">
               <button class="btn-ghost" onclick="toggleScoreEdit('${m.id}')">Aggiorna punteggio</button>
+              <button class="btn-ghost" onclick="toggleMatchFinished('${m.id}')">${m.finished ? 'Riapri partita' : 'Segna partita finita ✓'}</button>
               <button class="btn-ghost" onclick="toggleEditMatch('${m.id}')">Modifica</button>
               <button class="btn-danger" onclick="deleteMatch('${m.id}')">Elimina</button>
             </div>`}`}
@@ -2541,6 +2542,7 @@ function buildPartiteAdminHtml(){
 }
 
 function getMatchStatus(m){
+  if(m.finished) return 'finished';
   if(!m.date || !m.time) return null;
   const MATCH_DURATION_MIN = 100;
   const start = new Date(m.date+'T'+m.time+':00');
@@ -2552,7 +2554,8 @@ function getMatchStatus(m){
 
 function matchScoreHtml(m){
   const hasScore = m.scoreUs !== null && m.scoreUs !== undefined && m.scoreOpp !== null && m.scoreOpp !== undefined;
-  const live = getMatchStatus(m) === 'live';
+  const status = getMatchStatus(m);
+  const live = status === 'live';
 
   if(live){
     const scoreText = hasScore ? `${m.scoreUs} – ${m.scoreOpp} ` : '';
@@ -2581,7 +2584,7 @@ async function addMatch(){
   busy = true;
   try{
     matches = await fetchMatches();
-    matches.push({ id: uid(), team, date, time, field: field || null, opponent, important, scoreUs: null, scoreOpp: null });
+    matches.push({ id: uid(), team, date, time, field: field || null, opponent, important, scoreUs: null, scoreOpp: null, finished: false });
     const ok = await persistMatches(matches);
     if(ok) showToast('Partita aggiunta');
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
@@ -2615,6 +2618,24 @@ async function incrementScore(id, side){
     else m.scoreOpp = (m.scoreOpp ?? 0) + 1;
     const ok = await persistMatches(matches);
     if(!ok) showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
+    renderAdmin();
+  } catch(e){
+    showToast('Errore: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+async function toggleMatchFinished(id){
+  busy = true;
+  try{
+    matches = await fetchMatches();
+    const m = matches.find(x=>x.id===id);
+    if(!m){ showToast('Questa partita non esiste più.'); renderAdmin(); return; }
+    m.finished = !m.finished;
+    const ok = await persistMatches(matches);
+    if(ok) showToast(m.finished ? 'Partita segnata come finita' : 'Partita riaperta');
+    else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
     renderAdmin();
   } catch(e){
     showToast('Errore: ' + e.message);
