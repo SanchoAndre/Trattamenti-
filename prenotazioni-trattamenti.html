@@ -948,6 +948,7 @@ const FIREBASE_CONFIG = {
   projectId: 'trattamenti-9d1a0'
 };
 const USERS_PATH = 'prenotazioni-trattamenti/users';
+const CANCELLATIONS_PATH = 'prenotazioni-trattamenti/cancellazioni';
 const DATA_PATH = 'prenotazioni-trattamenti/slots';
 const MESSAGE_PATH = 'prenotazioni-trattamenti/message';
 const MATCHES_PATH = 'prenotazioni-trattamenti/matches';
@@ -989,6 +990,8 @@ let bookingOpenId = null;
 let editingFasciaturaEntry = null;
 let addingFasciaturaId = null;
 let allUsers = [];
+let cancellations = [];
+let cancellationsLoaded = false;
 let allUsersLoaded = false;
 let adminAthleteFilter = 'tutti';
 let editingAdminId = null;
@@ -1258,6 +1261,34 @@ async function fetchAllUsers(){
     return Object.keys(data).map(uid => Object.assign({ uid }, data[uid]));
   }catch(e){
     return [];
+  }
+}
+async function fetchCancellations(){
+  if(!isConfigured()) return [];
+  try{
+    const qs = await getAuthQueryParam();
+    const res = await fetch(`${FIREBASE_URL}/${CANCELLATIONS_PATH}.json${qs}`);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    return Array.isArray(data) ? data.filter(Boolean) : [];
+  }catch(e){
+    return [];
+  }
+}
+async function logCancellation(entry){
+  // Registro "best effort": se il salvataggio del log fallisce, l'annullamento vero e proprio
+  // deve comunque riuscire, quindi ogni errore qui viene ignorato senza propagarsi.
+  try{
+    const list = await fetchCancellations();
+    list.push(entry);
+    const qs = await getAuthQueryParam();
+    await fetch(`${FIREBASE_URL}/${CANCELLATIONS_PATH}.json${qs}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(list)
+    });
+  }catch(e){
+    console.error('Impossibile registrare la cancellazione nel log', e);
   }
 }
 async function saveUserProfile(uid, profile){
@@ -2220,7 +2251,17 @@ async function leaveFasciatura(slotId, bookingId){
     if(!confirm('Rimuovere questa iscrizione?')){ busy = false; return; }
     slot.bookings = slot.bookings.filter(b=>b.id!==bookingId);
     const ok = await persistSlots(slots);
-    if(ok) showToast('Rimosso dalla fascia');
+    if(ok){
+      showToast('Rimosso dalla fascia');
+      logCancellation({
+        id: uid(), slotId: slot.id, type: 'fasciatura',
+        date: slot.date, time: slot.time, duration: slot.duration, physio: slot.physio,
+        name: entry ? entry.name : null, note: entry ? entry.note : null,
+        cancelledBy: isAdmin ? currentAdminName : (userProfile && userProfile.username),
+        cancelledByRole: isAdmin ? 'staff' : 'atleta',
+        cancelledAt: Date.now()
+      });
+    }
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
     if(currentTab==='admin') renderAdmin(); else renderAtleta();
   } catch(e){
@@ -2308,9 +2349,21 @@ async function cancelBooking(id){
         return;
       }
       if(!confirm('Rimuovere tutti gli iscritti da questa fascia?')) return;
+      const removedBookings = Array.isArray(slot.bookings) ? slot.bookings : [];
       slot.bookings = [];
       const ok = await persistSlots(slots);
-      if(ok) showToast('Fascia liberata');
+      if(ok){
+        showToast('Fascia liberata');
+        removedBookings.forEach(b=>{
+          logCancellation({
+            id: uid(), slotId: slot.id, type: 'fasciatura',
+            date: slot.date, time: slot.time, duration: slot.duration, physio: slot.physio,
+            name: b.name, note: b.note,
+            cancelledBy: currentAdminName, cancelledByRole: 'staff',
+            cancelledAt: Date.now()
+          });
+        });
+      }
       else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
       if(currentTab==='admin') renderAdmin(); else renderAtleta();
       return;
@@ -2322,13 +2375,24 @@ async function cancelBooking(id){
       }
     }
     if(!confirm('Annullare questa prenotazione?')){ return; }
+    const cancelledInfo = { name: slot.name, note: slot.note };
     slot.name = null;
     slot.note = null;
     slot.bookedAt = null;
     slot.bookedByUid = null;
     slot.done = false;
     const ok = await persistSlots(slots);
-    if(ok) showToast('Prenotazione annullata');
+    if(ok){
+      showToast('Prenotazione annullata');
+      logCancellation({
+        id: uid(), slotId: slot.id, type: 'slot',
+        date: slot.date, time: slot.time, duration: slot.duration, physio: slot.physio,
+        name: cancelledInfo.name, note: cancelledInfo.note,
+        cancelledBy: isAdmin ? currentAdminName : (userProfile && userProfile.username),
+        cancelledByRole: isAdmin ? 'staff' : 'atleta',
+        cancelledAt: Date.now()
+      });
+    }
     else showToast('Errore nel salvataggio: ' + (lastSaveError || 'riprova'));
     if(currentTab==='admin') renderAdmin(); else renderAtleta();
   } catch(e){
@@ -2454,9 +2518,22 @@ function renderAdmin(){
       <button class="subtabbtn ${adminView==='partite'?'active':''}" onclick="switchAdminView('partite')">Partite</button>
       <button class="subtabbtn ${adminView==='svolti'?'active':''}" onclick="switchAdminView('svolti')">Trattamenti svolti</button>
       <button class="subtabbtn ${adminView==='atleti'?'active':''}" onclick="switchAdminView('atleti')">Atleti</button>
+      <button class="subtabbtn ${adminView==='cancellazioni'?'active':''}" onclick="switchAdminView('cancellazioni')">Cancellazioni</button>
       <button class="subtabbtn ${adminView==='riepilogo'?'active':''}" onclick="switchAdminView('riepilogo')">Riepilogo</button>
     </div>`;
 
+  if(adminView === 'cancellazioni'){
+    if(!cancellationsLoaded){
+      html += '<div class="spin">Carico il registro…</div>';
+      main.innerHTML = html;
+      loadCancellations();
+      return;
+    }
+    html += buildCancellazioniHtml();
+    main.innerHTML = html;
+    initAutoGrow();
+    return;
+  }
   html += adminView === 'riepilogo' ? buildRiepilogoHtml() : (adminView === 'partite' ? buildPartiteAdminHtml() : (adminView === 'svolti' ? buildSvoltiHtml() : (adminView === 'atleti' ? buildAtletiHtml() : buildGestioneHtml())));
   main.innerHTML = html;
   initAutoGrow();
@@ -2475,6 +2552,36 @@ async function loadAllUsers(){
   allUsers = await fetchAllUsers();
   allUsersLoaded = true;
   renderAdmin();
+}
+
+async function loadCancellations(){
+  cancellations = await fetchCancellations();
+  cancellationsLoaded = true;
+  renderAdmin();
+}
+
+function buildCancellazioniHtml(){
+  let html = `<button class="btn-ghost no-print" style="width:100%; margin-bottom:12px;" onclick="loadCancellations()">↻ Aggiorna registro</button>`;
+  if(cancellations.length === 0){
+    html += `<div class="empty"><div class="icon">📋</div>Nessuna cancellazione registrata finora.</div>`;
+    return html;
+  }
+  const sorted = [...cancellations].sort((a,b)=> (b.cancelledAt||0) - (a.cancelledAt||0));
+  html += `<div class="sectiontitle">${sorted.length} cancellazion${sorted.length===1?'e':'i'}</div>`;
+  sorted.forEach(c=>{
+    const end = c.time ? addMinutes(c.time, c.duration||0) : '';
+    const cancelledAtStr = c.cancelledAt ? new Date(c.cancelledAt).toLocaleString('it-IT', {day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+    html += `<div class="slotcard">
+      <div class="disc taken"><span class="n">${c.duration||''}</span><span class="u">min</span></div>
+      <div class="slotinfo">
+        <span class="slottime">Slot: ${c.date ? formatDayShort(c.date) : ''} ${c.time||''}${end?'–'+end:''}${c.type==='fasciatura'?' (fasciatura)':''}</span>
+        ${c.physio ? `<div class="notetext">Fisio: <b>${escapeHtml(c.physio)}</b></div>` : ''}
+        <div class="bookedname">Prenotazione di <b>${escapeHtml(c.name || 'sconosciuto')}</b>${c.note ? ` — ${escapeHtml(c.note)}` : ''}</div>
+        <div class="notetext">Annullata da <b>${escapeHtml(c.cancelledBy || 'sconosciuto')}</b> (${c.cancelledByRole==='staff'?'staff':'atleta'}) il ${cancelledAtStr}</div>
+      </div>
+    </div>`;
+  });
+  return html;
 }
 
 function setAdminAthleteFilter(team){
@@ -3065,6 +3172,8 @@ function doLogout(){
   allUsers = [];
   allUsersLoaded = false;
   adminAthleteFilter = 'tutti';
+  cancellations = [];
+  cancellationsLoaded = false;
   clearSessionLogin('staff');
   if(adminAuthApp){
     try{ adminAuthApp.auth().signOut(); }catch(e){}
