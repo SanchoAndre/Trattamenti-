@@ -801,7 +801,13 @@
     display:flex;
     gap:8px;
     margin-bottom:18px;
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    padding-bottom:2px;
   }
+  .adminsubnav::-webkit-scrollbar{display:none;}
   .subtabbtn{
     background:var(--card);
     border:1px solid var(--line);
@@ -809,6 +815,8 @@
     font-size:13px;
     padding:8px 14px;
     border-radius:999px;
+    flex:none;
+    white-space:nowrap;
   }
   .subtabbtn.active{
     background:var(--pitch);
