@@ -1660,6 +1660,24 @@ function showToast(msg){
 
 // ---------- helpers ----------
 function pad(n){ return String(n).padStart(2,'0'); }
+function hasNearbyBooking(currentSlots, userUid, date, time, excludeSlotId){
+  if(!userUid || !date || !time) return false;
+  const target = new Date(`${date}T${time}:00`).getTime();
+  if(isNaN(target)) return false;
+  const ONE_HOUR_MS = 60*60*1000;
+  return currentSlots.some(s=>{
+    if(s.id === excludeSlotId) return false;
+    if(!s.date || !s.time) return false;
+    const t = new Date(`${s.date}T${s.time}:00`).getTime();
+    if(isNaN(t)) return false;
+    if(Math.abs(t - target) >= ONE_HOUR_MS) return false;
+    if(s.type === 'fasciatura'){
+      return Array.isArray(s.bookings) && s.bookings.some(b=>b.bookedByUid === userUid);
+    }
+    return s.bookedByUid === userUid;
+  });
+}
+
 function addMinutes(time, mins){
   const [h,m] = time.split(':').map(Number);
   const total = h*60+m+Number(mins);
@@ -2268,6 +2286,11 @@ async function bookSlot(id){
     const slot = slots.find(s=>s.id===id);
     if(!slot){ showToast('Questo slot non esiste più.'); loaded=true; bookingOpenId = null; renderAtleta(); return; }
     if(slot.name){ showToast('Slot appena occupato da un altro atleta.'); bookingOpenId = null; renderAtleta(); return; }
+    if(hasNearbyBooking(slots, currentUser.uid, slot.date, slot.time, slot.id)){
+      showToast('Hai già una prenotazione entro un\'ora da questo orario: puoi prenotarne solo una per fascia oraria.');
+      renderAtleta();
+      return;
+    }
     slot.name = name;
     slot.note = note || null;
     slot.bookedAt = Date.now();
@@ -2306,6 +2329,11 @@ async function joinFasciatura(id){
     if(slot.bookings.some(b=>b.bookedByUid === currentUser.uid)){
       showToast('Sei già iscritto a questa fascia.');
       bookingOpenId = null;
+      renderAtleta();
+      return;
+    }
+    if(hasNearbyBooking(slots, currentUser.uid, slot.date, slot.time, slot.id)){
+      showToast('Hai già una prenotazione entro un\'ora da questo orario: puoi prenotarne solo una per fascia oraria.');
       renderAtleta();
       return;
     }
